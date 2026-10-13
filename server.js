@@ -26,7 +26,7 @@ const MAX_MESSAGES = 20;
 
 const SYSTEM_PROMPT = [
   "You are the first line IT help assistant for staff, in a student project that imitates an NBB internal helpdesk. Say so if asked whether you are the real NBB system.",
-  "Answer only using the help articles below. Give simple steps a non technical person can follow, and keep answers short and friendly.",
+  "Answer only using the help articles below. Give simple steps a non technical person can follow, and keep answers short and friendly. Write plain text only, no markdown, no asterisks, no bullet symbols, and number steps like 1. 2. 3. on separate lines.",
   "Never ask for or accept passwords. If the user shares one, tell them not to.",
   "If the problem is not in the articles, the steps did not work, the user says it is urgent, or the user asks for a person, reply with one short sentence saying you are creating a ticket for the IT team, and end your reply with " + ESCALATE_TAG + ".",
   "",
@@ -49,6 +49,11 @@ function saveTickets(list) {
 }
 
 // ---------- the answer engine ----------
+
+// The chat box shows plain text, so remove any markdown the AI adds anyway.
+function plain(text) {
+  return text.replace(/\*\*|__|`/g, "").replace(/^\s*[*#>]+\s+/gm, "").replace(/[ \t]+\n/g, "\n").trim();
+}
 
 // Used when there is no API key, so the demo still works. Picks the article with the most keyword hits.
 function keywordAnswer(text) {
@@ -83,7 +88,7 @@ async function aiAnswer(messages, system = SYSTEM_PROMPT) {
   const data = await res.json();
   const raw = (data.content || []).map((c) => c.text || "").join("").trim();
   const escalate = raw.includes(ESCALATE_TAG);
-  return { reply: raw.replace(ESCALATE_TAG, "").trim(), escalate };
+  return { reply: plain(raw.replace(ESCALATE_TAG, "")), escalate };
 }
 
 // Google Gemini. It calls the assistant "model" instead of "assistant".
@@ -104,7 +109,7 @@ async function geminiAnswer(messages, system = SYSTEM_PROMPT) {
   const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
   const raw = parts.map((p) => p.text || "").join("").trim();
   if (!raw) throw new Error("Gemini returned an empty answer");
-  return { reply: raw.replace(ESCALATE_TAG, "").trim(), escalate: raw.includes(ESCALATE_TAG) };
+  return { reply: plain(raw.replace(ESCALATE_TAG, "")), escalate: raw.includes(ESCALATE_TAG) };
 }
 
 // Groq uses the common chat format, where the instructions go in as a "system" message.
@@ -144,7 +149,7 @@ async function groqAnswer(messages, system = SYSTEM_PROMPT) {
   const data = await res.json();
   const raw = ((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "").trim();
   if (!raw) throw new Error("Groq returned an empty answer");
-  return { reply: raw.replace(ESCALATE_TAG, "").trim(), escalate: raw.includes(ESCALATE_TAG) };
+  return { reply: plain(raw.replace(ESCALATE_TAG, "")), escalate: raw.includes(ESCALATE_TAG) };
 }
 
 const AI_ON = Boolean(GEMINI_KEY || GROQ_KEY || API_KEY);
