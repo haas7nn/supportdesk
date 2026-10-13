@@ -5,6 +5,9 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { createStore } = require("./store");
+const auth = require("./auth");
+const alerts = require("./alerts");
 
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
@@ -15,9 +18,7 @@ const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
 const GEMINI_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const PUBLIC_DIR = path.join(__dirname, "public");
-const TICKETS_FILE = path.join(__dirname, "tickets.json");
 const knowledge = require("./knowledge");
-const UPLOAD_DIR = path.join(__dirname, "uploads");
 
 const AI_TIMEOUT_MS = 15000; // if the AI is slower than this, use the keyword answer instead
 const ESCALATE_TAG = "[ESCALATE]";
@@ -45,19 +46,15 @@ function systemPrompt() {
 ].join("\n");
 }
 
-// ---------- tickets (a JSON file keeps it simple and easy to explain) ----------
+// ---------- storage ----------
+// The store keeps everything in memory for speed and saves it in the background,
+// to files or to a database, depending on whether DATABASE_URL is set (see store.js).
 
-function readTickets() {
-  try {
-    return JSON.parse(fs.readFileSync(TICKETS_FILE, "utf8"));
-  } catch {
-    return [];
-  }
-}
-
-function saveTickets(list) {
-  fs.writeFileSync(TICKETS_FILE, JSON.stringify(list, null, 2));
-}
+let store = null;
+let conversations = null;
+const readTickets = () => store.tickets;
+const saveTickets = () => Promise.resolve(store.saveTickets()).catch((err) => console.error("Could not save tickets: " + err.message));
+const saveUsers = () => Promise.resolve(store.saveUsers()).catch((err) => console.error("Could not save team: " + err.message));
 
 // ---------- the answer engine ----------
 
@@ -292,25 +289,34 @@ function serveStatic(req, res) {
 
 // ---------- protection ----------
 
-// The IT team page and the ticket list ask for a password (HTTP Basic, the browser shows its own box).
-// With no ADMIN_PASSWORD set, they only open from the same computer, which keeps local testing easy.
-function isAdmin(req) {
+// The IT team signs in with a username and password and gets a signed cookie (see auth.js).
+// With no ADMIN_PASSWORD set, the pages only open from the same computer, which keeps local testing easy.
+const LOCAL_USER = { username: "local", name: "Local", role: "owner" };
+
+function currentUser(req) {
   if (!ADMIN_PASSWORD) {
     const a = req.socket.remoteAddress || "";
-    return a === "127.0.0.1" || a === "::1" || a === "::ffff:127.0.0.1";
+    if (a === "127.0.0.1" || a === "::1" || a === "::ffff:127.0.0.1") return LOCAL_USER;
   }
-  const header = req.headers.authorization || "";
-  if (!header.startsWith("Basic ")) return false;
-  const given = Buffer.from(header.slice(6), "base64").toString("utf8");
-  const password = given.slice(given.indexOf(":") + 1);
-  const a = crypto.createHash("sha256").update(password).digest();
-  const b = crypto.createHash("sha256").update(ADMIN_PASSWORD).digest();
-  return crypto.timingSafeEqual(a, b);
+  const session = auth.readSession(req);
+  if (!session) return null;
+  const user = store.users.find((u) => u.username === session.u);
+  // A changed password (or a removed person) ends the session.
+  return user && user.hash.slice(0, 8) === session.pv ? user : null;
 }
 
-function askForPassword(res) {
-  res.writeHead(401, { "www-authenticate": 'Basic realm="IT team"', "content-type": "text/plain" });
-  res.end("Password needed.");
+const isHttps = (req) => req.headers["x-forwarded-proto"] === "https" || Boolean(req.socket.encrypted);
+const safeUser = (u) => ({ username: u.username, name: u.name, role: u.role });
+
+// The owner account always matches the ADMIN_PASSWORD setting, so a forgotten password is fixed by changing that setting.
+async function ensureOwner() {
+  if (!ADMIN_PASSWORD) return;
+  let owner = store.users.find((u) => u.username === "admin");
+  if (owner && auth.checkPassword(ADMIN_PASSWORD, owner)) return;
+  const { salt, hash } = auth.hashPassword(ADMIN_PASSWORD);
+  if (owner) Object.assign(owner, { salt, hash, role: "owner" });
+  else store.users.push({ username: "admin", name: "Admin", role: "owner", salt, hash, createdAt: Date.now() });
+  await saveUsers();
 }
 
 // Simple limit per visitor, kept in memory. Stops one person using up the free AI quota.
@@ -330,26 +336,8 @@ setInterval(() => hits.clear(), 60 * 60 * 1000).unref();
 // Every chat is stored on the server, so the IT team can read it, take over from the bot and reply.
 // Roles: user (employee), assistant (bot), agent (IT team member), system (notes like "joined the chat").
 
-const CONV_FILE = path.join(__dirname, "conversations.json");
 const MAX_CONVERSATIONS = 300;
 const MAX_CONV_MESSAGES = 100;
-const conversations = new Map();
-
-try {
-  for (const c of JSON.parse(fs.readFileSync(CONV_FILE, "utf8"))) conversations.set(c.id, c);
-} catch {
-  // first run, nothing saved yet
-}
-
-let saveTimer = null;
-function saveConversations() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    fs.writeFile(CONV_FILE, JSON.stringify([...conversations.values()]), (err) => {
-      if (err) console.error("Could not save conversations: " + err.message);
-    });
-  }, 300);
-}
 
 function newConversation() {
   const conv = {
@@ -360,6 +348,8 @@ function newConversation() {
     needsHuman: false,
     everEscalated: false, // stays true even after hand back, used for the numbers on the Stats tab
     tookOver: false,
+    takenBy: "", // display name of the IT team member who has the chat
+    takenByUser: "",
     outcome: "", // "solved" or "not_solved", from the Did that fix it buttons
     priority: "normal", // normal or urgent
     topic: "",
@@ -368,9 +358,10 @@ function newConversation() {
     messages: [],
   };
   conversations.set(conv.id, conv);
+  store.touch(conv);
   if (conversations.size > MAX_CONVERSATIONS) {
     const oldest = [...conversations.values()].sort((a, b) => a.updatedAt - b.updatedAt)[0];
-    conversations.delete(oldest.id);
+    store.removeConversation(oldest.id);
   }
   return conv;
 }
@@ -378,7 +369,7 @@ function newConversation() {
 function addMessage(conv, role, content, extra) {
   conv.messages.push({ role, content: String(content).slice(0, 1000), at: Date.now(), ...extra });
   conv.updatedAt = Date.now();
-  saveConversations();
+  store.touch(conv);
 }
 
 // What the AI should see: the IT team counts as the assistant side, system notes are left out.
@@ -402,13 +393,16 @@ function publicView(conv, since) {
     ticketId: conv.ticketId,
     count: conv.messages.length,
     priority: conv.priority,
-    messages: conv.messages.slice(since).map((m, k) => ({ i: since + k, role: m.role, content: m.content, at: m.at, ask: Boolean(m.fb && !m.fbDone), img: m.img || "" })),
+    takenBy: conv.takenBy,
+    messages: conv.messages.slice(since).map((m, k) => ({ i: since + k, role: m.role, content: m.content, by: m.by || "", at: m.at, ask: Boolean(m.fb && !m.fbDone), img: m.img || "" })),
   };
 }
 
 function flagForPerson(conv) {
+  const wasWaiting = conv.needsHuman;
   conv.needsHuman = true;
   conv.everEscalated = true;
+  if (!wasWaiting) alerts.chatNeedsPerson(conv);
 }
 
 function requireJson(req) {
@@ -466,7 +460,10 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { error: "This chat is full. Please send a ticket to the IT team." });
       }
       addMessage(conv, "user", text);
-      if (URGENT.test(text)) conv.priority = "urgent";
+      if (URGENT.test(text) && conv.priority !== "urgent") {
+        conv.priority = "urgent";
+        alerts.chatBecameUrgent(conv);
+      }
       if (!conv.topic && !knowledge.isGreeting(text)) conv.topic = knowledge.topicFor(text);
       // When a person has taken over, the bot stays quiet.
       if (conv.mode === "bot" && WANTS_HUMAN.test(text)) {
@@ -528,9 +525,8 @@ const server = http.createServer(async (req, res) => {
       if (!isJpeg || bytes.length > 500000) return sendJson(res, 400, { error: "That picture is not valid or is too big." });
       if (conv.messages.filter((m) => m.img).length >= 5) return sendJson(res, 400, { error: "Up to 5 screenshots per chat." });
       if (conv.messages.length >= MAX_CONV_MESSAGES - 1) return sendJson(res, 400, { error: "This chat is full. Please send a ticket to the IT team." });
-      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
       const name = crypto.randomUUID() + ".jpg";
-      fs.writeFileSync(path.join(UPLOAD_DIR, name), bytes);
+      await store.putImage(name, bytes);
       addMessage(conv, "user", "Screenshot", { img: "/uploads/" + name });
       if (conv.mode === "bot") addMessage(conv, "assistant", pick("image", recentText(conv)));
       return sendJson(res, 200, publicView(conv, since));
@@ -539,11 +535,10 @@ const server = http.createServer(async (req, res) => {
     // pictures are served by their long random name, nobody can guess one
     const upload = pathname.match(/^\/uploads\/([0-9a-f-]{36}\.jpg)$/);
     if (req.method === "GET" && upload) {
-      return fs.readFile(path.join(UPLOAD_DIR, upload[1]), (err, data) => {
-        if (err) return res.writeHead(404).end("Not found");
-        res.writeHead(200, { "content-type": "image/jpeg", "x-content-type-options": "nosniff", "cache-control": "private, max-age=3600" });
-        res.end(data);
-      });
+      const data = await store.getImage(upload[1]);
+      if (!data) return res.writeHead(404).end("Not found");
+      res.writeHead(200, { "content-type": "image/jpeg", "x-content-type-options": "nosniff", "cache-control": "private, max-age=3600" });
+      return res.end(data);
     }
 
     // employee checks a ticket, with the ticket number and the contact they gave
@@ -584,22 +579,121 @@ const server = http.createServer(async (req, res) => {
         transcript,
       };
       tickets.push(ticket);
-      saveTickets(tickets);
+      await saveTickets();
+      alerts.newTicket(ticket);
       conv.ticketId = ticket.id;
       conv.name = name;
       flagForPerson(conv);
       conv.updatedAt = Date.now();
-      saveConversations();
+      store.touch(conv);
       return sendJson(res, 201, { id: ticket.id });
     }
 
+    // IT team signs in
+    if (req.method === "POST" && pathname === "/api/login") {
+      if (tooMany(req, "login", 10, 10 * 60 * 1000)) return sendJson(res, 429, { error: "Too many tries. Please wait a few minutes." });
+      if (!requireJson(req)) return sendJson(res, 415, { error: "Send JSON." });
+      const body = await readBody(req);
+      const username = String(body.username || "").trim().toLowerCase();
+      const user = store.users.find((u) => u.username === username);
+      const ok = auth.checkPassword(String(body.password || "").slice(0, 200), user);
+      // The same message for a wrong name and a wrong password.
+      if (!ok) return sendJson(res, 401, { error: "Wrong username or password." });
+      res.setHeader("set-cookie", auth.makeCookie(user, isHttps(req)));
+      return sendJson(res, 200, safeUser(user));
+    }
+    if (req.method === "POST" && pathname === "/api/logout") {
+      res.setHeader("set-cookie", auth.clearCookie(isHttps(req)));
+      return sendJson(res, 200, { ok: true });
+    }
+
     // everything below is for the IT team only
-    if (pathname.startsWith("/api/tickets") || pathname.startsWith("/api/conversations") || pathname === "/api/stats" || pathname === "/api/knowledge" || pathname === "/agent.html") {
-      if (!isAdmin(req)) return askForPassword(res);
+    const user = currentUser(req);
+    const teamPage = pathname === "/agent.html" || pathname === "/articles.html";
+    const teamApi = /^\/api\/(tickets|conversations|stats|knowledge|team|me|config|alerts)(\/|$)/.test(pathname);
+    if (teamPage && !user) {
+      res.writeHead(302, { location: "/login.html" });
+      return res.end();
+    }
+    if (teamApi && !user) return sendJson(res, 401, { error: "Please sign in." });
+
+    if (req.method === "GET" && pathname === "/api/me") return sendJson(res, 200, safeUser(user));
+
+    if (req.method === "GET" && pathname === "/api/config") {
+      return sendJson(res, 200, { storage: store.mode, emailAlerts: alerts.enabled, user: safeUser(user) });
+    }
+
+    // team members: anyone signed in can see the list and change their own password, only the owner manages the rest
+    const strongEnough = (p) => typeof p === "string" && p.length >= 8 && p.length <= 100;
+    if (req.method === "GET" && pathname === "/api/team") {
+      return sendJson(res, 200, store.users.map((u) => ({ ...safeUser(u), createdAt: u.createdAt })));
+    }
+    if (req.method === "POST" && /^\/api\/(team|me\/password|alerts\/test)/.test(pathname)) {
+      if (!requireJson(req)) return sendJson(res, 415, { error: "Send JSON." });
+      const body = await readBody(req);
+
+      if (pathname === "/api/me/password") {
+        const mine = store.users.find((u) => u.username === user.username);
+        if (!mine) return sendJson(res, 400, { error: "This local session has no password." });
+        if (!auth.checkPassword(String(body.current || ""), mine)) return sendJson(res, 400, { error: "Your current password is not right." });
+        if (!strongEnough(body.next)) return sendJson(res, 400, { error: "Use a new password of at least 8 characters." });
+        Object.assign(mine, auth.hashPassword(body.next));
+        await saveUsers();
+        res.setHeader("set-cookie", auth.makeCookie(mine, isHttps(req)));
+        return sendJson(res, 200, { ok: true, note: mine.username === "admin" ? "The server setting ADMIN_PASSWORD will set this account back at the next restart." : "" });
+      }
+
+      if (user.role !== "owner") return sendJson(res, 403, { error: "Only the owner can do this." });
+
+      if (pathname === "/api/alerts/test") {
+        try {
+          await alerts.test();
+          return sendJson(res, 200, { sent: true });
+        } catch (err) {
+          return sendJson(res, 400, { error: err.message });
+        }
+      }
+
+      if (pathname === "/api/team") {
+        const username = String(body.username || "").trim().toLowerCase();
+        const name = String(body.name || "").trim().slice(0, 40);
+        if (!/^[a-z0-9._-]{3,20}$/.test(username)) return sendJson(res, 400, { error: "Username: 3 to 20 letters, numbers, dots or dashes." });
+        if (!name) return sendJson(res, 400, { error: "Add a display name." });
+        if (!strongEnough(body.password)) return sendJson(res, 400, { error: "Use a password of at least 8 characters." });
+        if (store.users.some((u) => u.username === username)) return sendJson(res, 400, { error: "That username is taken." });
+        store.users.push({ username, name, role: "member", ...auth.hashPassword(body.password), createdAt: Date.now() });
+        await saveUsers();
+        return sendJson(res, 201, { ok: true });
+      }
+
+      const target = pathname.match(/^\/api\/team\/([a-z0-9._-]+)\/(delete|password)$/);
+      if (target) {
+        const member = store.users.find((u) => u.username === target[1]);
+        if (!member) return sendJson(res, 404, { error: "No such member." });
+        if (target[2] === "delete") {
+          if (member.role === "owner") return sendJson(res, 400, { error: "The owner cannot be removed." });
+          store.users.splice(store.users.indexOf(member), 1);
+          await saveUsers();
+          return sendJson(res, 200, { ok: true });
+        }
+        if (!strongEnough(body.password)) return sendJson(res, 400, { error: "Use a password of at least 8 characters." });
+        Object.assign(member, auth.hashPassword(body.password));
+        await saveUsers();
+        return sendJson(res, 200, { ok: true });
+      }
+    }
+
+    // try the bot's keyword match from the articles page
+    if (req.method === "POST" && pathname === "/api/knowledge/test") {
+      if (!requireJson(req)) return sendJson(res, 415, { error: "Send JSON." });
+      const body = await readBody(req);
+      const text = String(body.text || "").slice(0, 300);
+      const result = knowledge.keywordAnswer(text, "");
+      return sendJson(res, 200, { topic: result.escalate ? "" : knowledge.topicFor(text), reply: result.escalate ? "" : result.reply });
     }
 
     if (req.method === "GET" && pathname === "/api/tickets") {
-      return sendJson(res, 200, readTickets().reverse());
+      return sendJson(res, 200, [...readTickets()].reverse());
     }
 
     // mark a ticket solved or open again
@@ -613,7 +707,7 @@ const server = http.createServer(async (req, res) => {
       if (!ticket) return sendJson(res, 404, { error: "Ticket not found." });
       ticket.status = body.status;
       ticket.solvedAt = body.status === "solved" ? new Date().toISOString() : "";
-      saveTickets(tickets);
+      await saveTickets();
       const conv = conversations.get(ticket.conversationId);
       if (conv) addMessage(conv, "system", body.status === "solved" ? "Your ticket " + ticket.id + " was marked solved by the IT team." : "Your ticket " + ticket.id + " was opened again.");
       return sendJson(res, 200, ticket);
@@ -654,6 +748,8 @@ const server = http.createServer(async (req, res) => {
             needsHuman: c.needsHuman,
             priority: c.priority,
             outcome: c.outcome,
+            takenBy: c.takenBy,
+            takenByUser: c.takenByUser,
             updatedAt: c.updatedAt,
             count: c.messages.length,
             preview: last ? last.content.slice(0, 80) : "",
@@ -674,23 +770,27 @@ const server = http.createServer(async (req, res) => {
       if (req.method === "POST" && action) {
         if (!requireJson(req)) return sendJson(res, 415, { error: "Send JSON." });
         if (action === "takeover") {
-          if (conv.mode !== "human") {
+          if (conv.mode !== "human" || conv.takenByUser !== user.username) {
             conv.mode = "human";
             conv.tookOver = true;
-            addMessage(conv, "system", "An IT team member has joined the chat.");
+            conv.takenBy = user.name;
+            conv.takenByUser = user.username;
+            addMessage(conv, "system", user.name + " from the IT team has joined the chat.");
           }
           return sendJson(res, 200, publicView(conv, since));
         }
         if (action === "priority") {
           const body = await readBody(req);
           conv.priority = body.urgent === true ? "urgent" : "normal";
-          saveConversations();
+          store.touch(conv);
           return sendJson(res, 200, publicView(conv, since));
         }
         if (action === "handback") {
           if (conv.mode !== "bot") {
             conv.mode = "bot";
             conv.needsHuman = false;
+            conv.takenBy = "";
+            conv.takenByUser = "";
             addMessage(conv, "system", "You are back with the assistant.");
           }
           return sendJson(res, 200, publicView(conv, since));
@@ -701,7 +801,7 @@ const server = http.createServer(async (req, res) => {
           if (!text) return sendJson(res, 400, { error: "Write a reply first." });
           if (conv.mode !== "human") return sendJson(res, 409, { error: "Take over the chat first." });
           if (conv.messages.length >= MAX_CONV_MESSAGES) return sendJson(res, 400, { error: "This chat is full." });
-          addMessage(conv, "agent", text);
+          addMessage(conv, "agent", text, { by: user.name });
           conv.needsHuman = false;
           return sendJson(res, 200, publicView(conv, since));
         }
@@ -715,11 +815,33 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log("SupportDesk running at http://localhost:" + PORT);
-  console.log(ADMIN_PASSWORD ? "IT team page needs the admin password" : "No ADMIN_PASSWORD set, IT team page only opens on this computer");
-  if (GEMINI_KEY) console.log("AI mode on, Gemini model " + GEMINI_MODEL);
-  else if (GROQ_KEY) console.log("AI mode on, Groq model " + GROQ_MODEL);
-  else if (API_KEY) console.log("AI mode on, Claude model " + MODEL);
-  else console.log("No API key set, using the built in keyword answers");
+async function start() {
+  store = await createStore();
+  conversations = store.conversations;
+  await knowledge.init(store);
+  await ensureOwner();
+
+  server.listen(PORT, () => {
+    console.log("SupportDesk running at http://localhost:" + PORT);
+    console.log(store.mode === "postgres" ? "Storage: database, chats and tickets are kept for good" : "Storage: plain files, a free host wipes these when it restarts");
+    console.log(ADMIN_PASSWORD ? "IT team signs in with the username admin and the ADMIN_PASSWORD setting" : "No ADMIN_PASSWORD set, the IT team pages only open on this computer");
+    console.log(alerts.enabled ? "Email alerts on, " + alerts.recipients + " recipient(s)" : "Email alerts off");
+    if (GEMINI_KEY) console.log("AI mode on, Gemini model " + GEMINI_MODEL);
+    else if (GROQ_KEY) console.log("AI mode on, Groq model " + GROQ_MODEL);
+    else if (API_KEY) console.log("AI mode on, Claude model " + MODEL);
+    else console.log("No API key set, using the built in keyword answers");
+  });
+
+  // Hosts stop the server on every deploy. Save anything waiting before it goes.
+  const shutdown = async () => {
+    await store.flush();
+    process.exit(0);
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
+}
+
+start().catch((err) => {
+  console.error("Could not start: " + err.message);
+  process.exit(1);
 });

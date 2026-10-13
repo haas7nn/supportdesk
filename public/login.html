@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IT team sign in</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="disclaimer">Student project only. This is not an official NBB system and is not connected to NBB.</div>
+  <header class="top">
+    <div class="wrap bar">
+      <a class="brand" href="/"><b>NBB</b><span>IT Help<br>project</span></a>
+      <div class="bar-right"><a class="login" href="/">Back to portal</a></div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <form class="signin" id="form">
+      <h1>IT team sign in</h1>
+      <p class="fine">For IT team members only. Employees do not need to sign in.</p>
+      <label>Username
+        <input id="user" autocomplete="username" autocapitalize="none" required autofocus>
+      </label>
+      <label>Password
+        <input id="pass" type="password" autocomplete="current-password" required>
+      </label>
+      <button class="primary" type="submit">Sign in</button>
+      <p class="signin-error" id="error" role="alert"></p>
+    </form>
+  </main>
+
+  <script>
+    document.getElementById("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const error = document.getElementById("error");
+      error.textContent = "";
+      try {
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ username: document.getElementById("user").value, password: document.getElementById("pass").value }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not sign in.");
+        location.href = "/agent.html";
+      } catch (err) {
+        error.textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>

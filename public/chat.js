@@ -104,7 +104,7 @@ function render(m) {
     else addBubble(m.content, "me");
   } else if (m.role === "agent") {
     showTyping(false);
-    addBubble(m.content, "bot agent", t("it_team"));
+    addBubble(m.content, "bot agent", t("it_team") + (m.by ? " · " + m.by : ""));
   } else if (m.role === "assistant") {
     showTyping(false);
     addBubble(m.content, "bot");

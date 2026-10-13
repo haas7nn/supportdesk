@@ -13,12 +13,13 @@
     <div class="wrap bar">
       <a class="brand" href="/"><b>NBB</b><span>IT Help<br>project</span></a>
       <nav class="menu">
-        <a href="/">Employee portal</a>
-        <a href="/agent.html">IT team</a>
+        <a href="/agent.html" class="here">Live chats and tickets</a>
+        <a href="/articles.html">Help articles</a>
       </nav>
       <div class="bar-right">
+        <span class="whoami" id="whoami"></span>
         <button class="lang" id="sound" type="button">Sound alerts: off</button>
-        <a class="login" href="/">Back to portal</a>
+        <button class="lang" id="logout" type="button">Sign out</button>
       </div>
     </div>
   </header>
@@ -27,7 +28,7 @@
     <div class="page-head">
       <div>
         <h1>IT team</h1>
-        <p>Watch chats as they happen, take over from the assistant and reply yourself. See how well the bot is doing, and teach it new fixes.</p>
+        <p>Watch chats as they happen, take over from the assistant and reply yourself. See how well the bot is doing. The fixes the bot knows are on the <a href="/articles.html">Help articles</a> page.</p>
       </div>
     </div>
 
@@ -35,7 +36,7 @@
       <button class="tab on" id="tab-live" role="tab">Live chats <span class="pill" id="live-pill" hidden></span></button>
       <button class="tab" id="tab-tickets" role="tab">Tickets <span class="pill" id="ticket-pill" hidden></span></button>
       <button class="tab" id="tab-stats" role="tab">Stats</button>
-      <button class="tab" id="tab-articles" role="tab">Help articles</button>
+      <button class="tab" id="tab-team" role="tab">Team</button>
     </div>
 
     <section id="live" class="live">
@@ -78,16 +79,37 @@
       <p class="fine">Solved by the bot counts chats where the employee pressed "Yes, fixed" and never needed a person. The numbers reset when the server restarts, which happens on a free host.</p>
     </section>
 
-    <section id="articles" hidden>
-      <p class="fine top0">These are the fixes the bot knows. Change them, add new ones, then press Save. The bot uses them straight away. Keywords are the words an employee might write, separated by commas, in English or Arabic.</p>
-      <div id="art-list"></div>
-      <div class="toolbar">
-        <button class="ghost" id="art-add">Add an article</button>
-        <button class="primary" id="art-save">Save all</button>
-        <button class="ghost" id="art-download">Download file</button>
-        <span id="art-msg" class="art-msg"></span>
+    <section id="team" hidden>
+      <div class="team-grid">
+        <div class="panel-card">
+          <h2 class="sub">Your account</h2>
+          <p class="fine" id="me-line"></p>
+          <form id="pw-form" class="stack">
+            <input id="pw-current" type="password" placeholder="Current password" autocomplete="current-password" required>
+            <input id="pw-next" type="password" placeholder="New password, 8 characters or more" autocomplete="new-password" minlength="8" required>
+            <button class="primary" type="submit">Change password</button>
+            <span id="pw-msg" class="art-msg"></span>
+          </form>
+        </div>
+        <div class="panel-card" id="owner-box" hidden>
+          <h2 class="sub">IT team members</h2>
+          <div id="members"></div>
+          <form id="add-form" class="stack">
+            <input id="m-user" placeholder="Username, for example omar" maxlength="20" autocapitalize="none" required>
+            <input id="m-name" placeholder="Name shown to employees" maxlength="40" required>
+            <input id="m-pass" type="password" placeholder="Starting password, 8 characters or more" autocomplete="new-password" minlength="8" required>
+            <button class="primary" type="submit">Add member</button>
+            <span id="add-msg" class="art-msg"></span>
+          </form>
+        </div>
+        <div class="panel-card">
+          <h2 class="sub">Saving and alerts</h2>
+          <p class="fine" id="storage-line"></p>
+          <p class="fine" id="email-line"></p>
+          <button class="ghost" id="email-test" type="button" hidden>Send a test email</button>
+          <span id="email-msg" class="art-msg"></span>
+        </div>
       </div>
-      <p class="fine">On a free host, saved changes last until the server restarts. To keep them for good, download the file and replace <code>knowledge.json</code> in the project.</p>
     </section>
   </main>
 
@@ -103,6 +125,7 @@
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
+      if (res.status === 401) location.href = "/login.html";
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Request failed");
       return data;
@@ -116,7 +139,7 @@
     }
 
     // ---------- tabs ----------
-    const TABS = ["live", "tickets", "stats", "articles"];
+    const TABS = ["live", "tickets", "stats", "team"];
     let currentTab = "live";
     function showTab(name) {
       currentTab = name;
@@ -126,7 +149,7 @@
       }
       if (name === "tickets") loadTickets();
       if (name === "stats") loadStats();
-      if (name === "articles") loadArticles();
+      if (name === "team") loadTeam();
     }
     for (const t of TABS) $("tab-" + t).onclick = () => showTab(t);
 
@@ -176,6 +199,7 @@
     ];
     let selected = null;
     let selectedUrgent = false;
+    let me = { username: "", name: "", role: "member" };
 
     function ago(ms) {
       const sec = Math.max(0, Math.round((Date.now() - ms) / 1000));
@@ -199,7 +223,7 @@
         top.append(el("strong", "", c.name || "Employee " + c.id.slice(0, 4)));
         const tags = el("span", "tags");
         if (c.priority === "urgent") tags.append(el("span", "state wait", "Urgent"));
-        tags.append(el("span", "state " + (c.mode === "human" ? "human" : c.needsHuman ? "wait" : "bot"), c.mode === "human" ? "You" : c.needsHuman ? "Needs a person" : c.outcome === "solved" ? "Solved" : "Bot"));
+        tags.append(el("span", "state " + (c.mode === "human" ? "human" : c.needsHuman ? "wait" : "bot"), c.mode === "human" ? (c.takenByUser === me.username ? "You" : c.takenBy || "A teammate") : c.needsHuman ? "Needs a person" : c.outcome === "solved" ? "Solved" : "Bot"));
         top.append(tags);
         row.append(top, el("div", "preview", c.preview || "No messages"), el("div", "meta", ago(c.updatedAt) + (c.ticketId ? " · " + c.ticketId : "")));
         row.onclick = () => select(c.id);
@@ -216,13 +240,13 @@
       $("th-name").textContent = c.name || "Employee " + c.id.slice(0, 4);
       $("th-urgent").hidden = !selectedUrgent;
       $("urgent-btn").textContent = selectedUrgent ? "Remove urgent" : "Mark urgent";
-      $("th-meta").textContent = (c.ticketId ? "Ticket " + c.ticketId + " · " : "") + (c.mode === "human" ? "You are in this chat" : "The bot is answering");
+      $("th-meta").textContent = (c.ticketId ? "Ticket " + c.ticketId + " · " : "") + (c.mode === "human" ? (c.takenByUser === me.username ? "You are in this chat" : (c.takenBy || "A teammate") + " has this chat") : "The bot is answering");
       const thread = $("thread");
       const atBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 40;
       thread.textContent = "";
       for (const m of c.messages) {
         const b = el("div", "tb " + m.role);
-        if (m.role !== "system") b.append(el("small", "", m.role === "user" ? "Employee" : m.role === "agent" ? "IT team" : "Bot"));
+        if (m.role !== "system") b.append(el("small", "", m.role === "user" ? "Employee" : m.role === "agent" ? "IT team" + (m.by ? " · " + m.by : "") : "Bot"));
         if (m.img) {
           const link = el("a");
           link.href = m.img;
@@ -242,7 +266,9 @@
       const human = c.mode === "human";
       $("reply").disabled = !human;
       $("send").disabled = !human;
-      $("take").hidden = human;
+      const mine = human && c.takenByUser === me.username;
+      $("take").hidden = mine;
+      $("take").textContent = human ? "Take over from " + (c.takenBy || "teammate") : "Take over";
       $("back").hidden = !human;
       $("reply").placeholder = human ? "Write to the employee" : "Take over first, then write to the employee";
       document.querySelectorAll(".chip").forEach((chip) => { chip.disabled = !human; });
@@ -396,62 +422,68 @@
     }
     $("range").onchange = loadStats;
 
-    // ---------- help articles ----------
-    let articles = [];
-    function drawArticles() {
-      const box = $("art-list");
-      box.textContent = "";
-      articles.forEach((a, i) => {
-        const card = el("div", "art");
-        const topic = el("input");
-        topic.value = a.topic;
-        topic.placeholder = "Topic, for example Teams not working";
-        topic.oninput = () => { a.topic = topic.value; };
-        const kw = el("input");
-        kw.value = (a.keywords || []).join(", ");
-        kw.placeholder = "Keywords, separated by commas";
-        kw.oninput = () => { a.keywords = kw.value.split(",").map((k) => k.trim()).filter(Boolean); };
-        const answer = el("textarea");
-        answer.value = a.answer;
-        answer.rows = 3;
-        answer.placeholder = "The fix, in simple steps";
-        answer.oninput = () => { a.answer = answer.value; };
-        const ar = el("textarea");
-        ar.value = a.answer_ar || "";
-        ar.rows = 3;
-        ar.dir = "rtl";
-        ar.placeholder = "الحل بالعربية (اختياري)";
-        ar.oninput = () => { a.answer_ar = ar.value; };
-        const del = el("button", "ghost", "Delete");
-        del.type = "button";
-        del.onclick = () => { articles.splice(i, 1); drawArticles(); };
-        card.append(topic, kw, answer, ar, del);
-        box.append(card);
-      });
-    }
-    async function loadArticles() {
-      try { articles = await api("/api/knowledge"); drawArticles(); } catch (e) { $("art-msg").textContent = e.message; }
-    }
-    $("art-add").onclick = () => { articles.push({ topic: "", keywords: [], answer: "" }); drawArticles(); };
-    $("art-save").onclick = async () => {
-      $("art-msg").textContent = "Saving...";
+    // ---------- team ----------
+    async function loadTeam() {
       try {
-        articles = await api("/api/knowledge", { articles });
-        drawArticles();
-        $("art-msg").textContent = "Saved. The bot uses these now.";
-      } catch (e) { $("art-msg").textContent = e.message; }
+        const [cfg, members] = await Promise.all([api("/api/config"), api("/api/team")]);
+        me = cfg.user;
+        $("me-line").textContent = "Signed in as " + me.name + " (" + me.username + "), " + (me.role === "owner" ? "owner" : "team member") + ".";
+        $("storage-line").textContent = cfg.storage === "postgres"
+          ? "Chats, tickets, screenshots and help articles are saved in the database. Restarts do not lose anything."
+          : "Chats and tickets are saved in plain files. On a free host these are wiped when the server restarts. Set DATABASE_URL to keep them for good.";
+        $("email-line").textContent = cfg.emailAlerts ? "Email alerts are on. You get an email when a chat needs a person or a ticket arrives." : "Email alerts are off. Set RESEND_API_KEY and ALERT_EMAIL_TO on the server to turn them on.";
+        $("email-test").hidden = !(cfg.emailAlerts && me.role === "owner");
+        $("owner-box").hidden = me.role !== "owner";
+        const box = $("members");
+        box.textContent = "";
+        for (const m of members) {
+          const row = el("div", "member");
+          const who = el("div", "who");
+          who.append(el("strong", "", m.name), el("div", "meta", m.username + (m.role === "owner" ? " · owner" : "")));
+          row.append(who);
+          if (me.role === "owner" && m.role !== "owner") {
+            const reset = el("button", "ghost", "New password");
+            reset.onclick = async () => {
+              const password = prompt("New password for " + m.name + " (8 characters or more):");
+              if (!password) return;
+              try { await api("/api/team/" + m.username + "/password", { password }); alert("Done. " + m.name + " is signed out and can use the new password."); } catch (e) { alert(e.message); }
+            };
+            const remove = el("button", "ghost danger", "Remove");
+            remove.onclick = async () => {
+              if (!confirm("Remove " + m.name + "? They will be signed out.")) return;
+              try { await api("/api/team/" + m.username + "/delete", {}); loadTeam(); } catch (e) { alert(e.message); }
+            };
+            row.append(reset, remove);
+          }
+          box.append(row);
+        }
+      } catch (e) { $("me-line").textContent = e.message; }
+    }
+    $("pw-form").onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        const r = await api("/api/me/password", { current: $("pw-current").value, next: $("pw-next").value });
+        $("pw-msg").textContent = "Password changed." + (r.note ? " " + r.note : "");
+        $("pw-form").reset();
+      } catch (err) { $("pw-msg").textContent = err.message; }
     };
-    $("art-download").onclick = () => {
-      const blob = new Blob([JSON.stringify(articles, null, 2)], { type: "application/json" });
-      const link = el("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "knowledge.json";
-      link.click();
-      URL.revokeObjectURL(link.href);
+    $("add-form").onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api("/api/team", { username: $("m-user").value, name: $("m-name").value, password: $("m-pass").value });
+        $("add-msg").textContent = "Added. Give them the username and starting password.";
+        $("add-form").reset();
+        loadTeam();
+      } catch (err) { $("add-msg").textContent = err.message; }
     };
+    $("email-test").onclick = async () => {
+      $("email-msg").textContent = "Sending...";
+      try { await api("/api/alerts/test", {}); $("email-msg").textContent = "Sent. Check the inbox."; } catch (err) { $("email-msg").textContent = err.message; }
+    };
+    $("logout").onclick = async () => { await api("/api/logout", {}).catch(() => {}); location.href = "/login.html"; };
 
     // ---------- start ----------
-    refreshList();
+    api("/api/config").then((cfg) => { me = cfg.user; $("whoami").textContent = me.name; refreshList(); }).catch(() => {});
     loadTickets();
     setInterval(refreshList, 3000);
     setInterval(loadThread, 2000);

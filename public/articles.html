@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NBB Help Articles</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="disclaimer">Student project only. This is not an official NBB system and is not connected to NBB.</div>
+
+  <header class="top">
+    <div class="wrap bar">
+      <a class="brand" href="/"><b>NBB</b><span>IT Help<br>project</span></a>
+      <nav class="menu">
+        <a href="/agent.html">Live chats and tickets</a>
+        <a href="/articles.html" class="here">Help articles</a>
+      </nav>
+      <div class="bar-right"><a class="login" href="/">Back to portal</a></div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="page-head">
+      <div>
+        <h1>Help articles</h1>
+        <p>These are the fixes the assistant knows. Edit one, add a new one, then press Save. The bot uses the change straight away.</p>
+      </div>
+      <div class="head-actions">
+        <span class="dirty" id="dirty" hidden>Unsaved changes</span>
+        <button class="ghost" id="download" type="button">Download file</button>
+        <button class="primary" id="save" type="button">Save all</button>
+      </div>
+    </div>
+    <p class="notice" id="notice" hidden></p>
+
+    <div class="editor">
+      <aside class="side">
+        <input class="search" id="search" type="search" placeholder="Search articles" aria-label="Search articles">
+        <div class="art-items" id="items"></div>
+        <button class="ghost wide" id="add" type="button">Add an article</button>
+
+        <div class="tryit">
+          <h2>Try the bot</h2>
+          <p class="fine">Type what an employee might write, and see which article answers.</p>
+          <input id="try" placeholder="for example my teams is not working">
+          <div class="try-result" id="try-result"></div>
+        </div>
+      </aside>
+
+      <section class="form-card" id="form-card">
+        <div class="empty" id="blank">Pick an article on the left, or add a new one.</div>
+        <div id="fields" hidden>
+          <label>Topic
+            <input id="f-topic" maxlength="120" placeholder="for example Teams not working">
+          </label>
+          <label>Keywords
+            <input id="f-keywords" placeholder="teams, meeting, call, تيمز">
+            <span class="hint">Words an employee might write, separated by commas. English or Arabic.</span>
+          </label>
+          <div class="chips-row" id="kw-chips"></div>
+          <label>The fix, in English
+            <textarea id="f-answer" rows="6" maxlength="900" placeholder="Simple steps that anyone can follow"></textarea>
+            <span class="hint" id="count-en"></span>
+          </label>
+          <label>The fix, in Arabic (optional)
+            <textarea id="f-ar" rows="6" maxlength="900" dir="rtl" placeholder="الحل بالعربية"></textarea>
+            <span class="hint" id="count-ar"></span>
+          </label>
+          <div class="form-actions">
+            <button class="ghost danger" id="delete" type="button">Delete this article</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <p class="fine" id="storage-note"></p>
+  </main>
+
+  <footer><div class="wrap">A learning project by an NBB service team member. Not official, and no real staff data is used.</div></footer>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let articles = [];
+    let selected = -1;
+    let dirty = false;
+
+    async function api(path, body) {
+      const res = await fetch(path, body === undefined ? {} : {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.status === 401) location.href = "/login.html";
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Request failed");
+      return data;
+    }
+
+    function el(tag, className, text) {
+      const e = document.createElement(tag);
+      if (className) e.className = className;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+
+    function setDirty(on) {
+      dirty = on;
+      $("dirty").hidden = !on;
+    }
+
+    function note(text, bad) {
+      $("notice").hidden = !text;
+      $("notice").textContent = text || "";
+      $("notice").className = "notice" + (bad ? " bad" : "");
+    }
+
+    function drawList() {
+      const q = $("search").value.trim().toLowerCase();
+      const box = $("items");
+      box.textContent = "";
+      let shown = 0;
+      articles.forEach((a, i) => {
+        if (q && !(a.topic + " " + (a.keywords || []).join(" ") + " " + a.answer).toLowerCase().includes(q)) return;
+        shown++;
+        const row = el("button", "art-item" + (i === selected ? " sel" : ""));
+        row.type = "button";
+        row.append(el("strong", "", a.topic || "New article"), el("span", "meta", (a.keywords || []).length + " keywords" + (a.answer_ar ? " · Arabic" : "")));
+        row.onclick = () => select(i);
+        box.append(row);
+      });
+      if (!shown) box.append(el("div", "fine pad", articles.length ? "Nothing matches that search." : "No articles yet."));
+    }
+
+    function drawChips() {
+      const box = $("kw-chips");
+      box.textContent = "";
+      const a = articles[selected];
+      for (const k of a.keywords || []) box.append(el("span", "kw", k));
+    }
+
+    function select(i) {
+      selected = i;
+      const a = articles[i];
+      $("blank").hidden = true;
+      $("fields").hidden = false;
+      $("f-topic").value = a.topic;
+      $("f-keywords").value = (a.keywords || []).join(", ");
+      $("f-answer").value = a.answer;
+      $("f-ar").value = a.answer_ar || "";
+      counts();
+      drawChips();
+      drawList();
+    }
+
+    function counts() {
+      $("count-en").textContent = $("f-answer").value.length + " of 900 characters";
+      $("count-ar").textContent = $("f-ar").value.length + " of 900 characters";
+    }
+
+    function edit(apply) {
+      if (selected < 0) return;
+      apply(articles[selected]);
+      setDirty(true);
+      counts();
+      drawList();
+    }
+    $("f-topic").oninput = () => edit((a) => { a.topic = $("f-topic").value; });
+    $("f-keywords").oninput = () => { edit((a) => { a.keywords = $("f-keywords").value.split(",").map((k) => k.trim()).filter(Boolean); }); drawChips(); };
+    $("f-answer").oninput = () => edit((a) => { a.answer = $("f-answer").value; });
+    $("f-ar").oninput = () => edit((a) => { a.answer_ar = $("f-ar").value; });
+    $("search").oninput = drawList;
+
+    $("add").onclick = () => {
+      articles.push({ topic: "", keywords: [], answer: "" });
+      setDirty(true);
+      select(articles.length - 1);
+      $("f-topic").focus();
+    };
+
+    $("delete").onclick = () => {
+      if (selected < 0) return;
+      if (!confirm("Delete \"" + (articles[selected].topic || "this article") + "\"? You can still leave without saving to undo it.")) return;
+      articles.splice(selected, 1);
+      selected = -1;
+      $("fields").hidden = true;
+      $("blank").hidden = false;
+      setDirty(true);
+      drawList();
+    };
+
+    $("save").onclick = async () => {
+      $("save").disabled = true;
+      try {
+        articles = await api("/api/knowledge", { articles });
+        setDirty(false);
+        note("Saved. The bot uses these now.");
+        selected = Math.min(selected, articles.length - 1);
+        if (selected >= 0) select(selected); else drawList();
+      } catch (err) {
+        note(err.message, true);
+      } finally {
+        $("save").disabled = false;
+      }
+    };
+
+    $("download").onclick = () => {
+      const link = el("a");
+      link.href = URL.createObjectURL(new Blob([JSON.stringify(articles, null, 2)], { type: "application/json" }));
+      link.download = "knowledge.json";
+      link.click();
+      URL.revokeObjectURL(link.href);
+    };
+
+    // The try box asks the real server, so it answers exactly like the bot does without AI.
+    let tryTimer = null;
+    $("try").oninput = () => {
+      clearTimeout(tryTimer);
+      tryTimer = setTimeout(async () => {
+        const text = $("try").value.trim();
+        const out = $("try-result");
+        out.textContent = "";
+        if (!text) return;
+        try {
+          const r = await api("/api/knowledge/test", { text });
+          if (!r.topic) out.append(el("div", "fine", "No article matches. The bot would pass this to the IT team, or the AI would try its own steps."));
+          else out.append(el("strong", "", r.topic), el("div", "fine", r.reply));
+        } catch (err) { out.textContent = err.message; }
+      }, 300);
+    };
+
+    window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+    (async function start() {
+      try {
+        const [list, cfg] = await Promise.all([api("/api/knowledge"), api("/api/config")]);
+        articles = list;
+        $("storage-note").textContent = cfg.storage === "postgres"
+          ? "Saved in the database, so edits stay even after the server restarts."
+          : "Saved to a file on the server. On a free host that file is wiped when the server restarts, so use Download file to keep a copy and replace knowledge.json in the project.";
+        drawList();
+        if (articles.length) select(0);
+      } catch (err) { note(err.message, true); }
+    })();
+  </script>
+</body>
+</html>

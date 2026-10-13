@@ -34,9 +34,27 @@ function check(list) {
   });
 }
 
+// With a database, edits are kept there, so a redeploy of the code does not wipe them.
+let keep = null;
+async function init(store) {
+  if (store.mode !== "postgres") return;
+  const saved = await store.getKV("knowledge");
+  if (saved) items = check(saved);
+  keep = (list) => store.setKV("knowledge", list);
+}
+
 function set(list) {
   const cleaned = check(list);
-  fs.writeFileSync(FILE, JSON.stringify(cleaned, null, 2));
+  if (keep) {
+    keep(cleaned).catch((err) => console.error("Could not save the articles: " + err.message));
+    try {
+      fs.writeFileSync(FILE, JSON.stringify(cleaned, null, 2));
+    } catch {
+      // a read only disk is fine, the database has it
+    }
+  } else {
+    fs.writeFileSync(FILE, JSON.stringify(cleaned, null, 2));
+  }
   items = cleaned;
   return items;
 }
@@ -86,4 +104,4 @@ function promptList() {
   return items.map((k) => "- " + k.topic + ": " + k.answer);
 }
 
-module.exports = { get, set, check, isArabic, isGreeting, topicFor, keywordAnswer, promptList };
+module.exports = { init, get, set, check, isArabic, isGreeting, topicFor, keywordAnswer, promptList };
