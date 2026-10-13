@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IT team view</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="disclaimer">Student project only. Not an official NBB system.</div>
+  <main class="agent">
+    <h1>Tickets for the IT team</h1>
+    <p>Only the problems the assistant could not solve appear here, with the full chat so nobody has to ask again.</p>
+    <div id="list">Loading...</div>
+    <p><a href="/">Back to the portal</a></p>
+  </main>
+  <script>
+    const list = document.getElementById("list");
+    fetch("/api/tickets").then((r) => r.json()).then((tickets) => {
+      list.textContent = "";
+      if (!tickets.length) { list.textContent = "No tickets yet."; return; }
+      for (const t of tickets) {
+        const card = document.createElement("div");
+        card.className = "ticket-card";
+        const h = document.createElement("h3");
+        h.textContent = t.id + " · " + t.name;
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = t.contact + (t.place ? " · " + t.place : "") + " · " + new Date(t.createdAt).toLocaleString();
+        card.append(h, meta);
+        if (t.summary) {
+          const sum = document.createElement("div");
+          sum.className = "summary";
+          sum.textContent = t.summary;
+          card.append(sum);
+        }
+        const more = document.createElement("details");
+        const label = document.createElement("summary");
+        label.textContent = "Full chat";
+        more.append(label);
+        card.append(more);
+        for (const m of t.transcript) {
+          const p = document.createElement("div");
+          p.className = "line";
+          const who = document.createElement("b");
+          who.textContent = m.role === "user" ? "Employee: " : "Assistant: ";
+          p.append(who, document.createTextNode(m.content));
+          more.append(p);
+        }
+        list.append(card);
+      }
+    }).catch(() => { list.textContent = "Could not load tickets."; });
+  </script>
+</body>
+</html>

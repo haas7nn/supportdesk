@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NBB IT Help Project</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="disclaimer">Student project only. This is not an official NBB system and is not connected to NBB.</div>
+  <header class="top">
+    <div class="wrap bar">
+      <span class="brand">NBB <small>IT Help project</small></span>
+      <nav>
+        <a href="#help">Common problems</a>
+        <a href="#contact">Contact IT</a>
+        <a href="/agent.html">IT team view</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <h1>Something not working?</h1>
+        <p>Describe the problem to our assistant first. Many issues have a quick fix you can try yourself, and if it does not help, a ticket goes straight to the IT team with your chat attached.</p>
+        <button class="primary" id="hero-chat">Describe your problem</button>
+        <p class="note">Project idea: let AI solve the basic problems first, so only unsolved cases become tickets.</p>
+      </div>
+    </section>
+
+    <section class="wrap" id="help">
+      <h2>Common problems</h2>
+      <div class="cards">
+        <article><h3>Outlook</h3><p>Not updating, offline, or not receiving mail.</p></article>
+        <article><h3>Keyboard and mouse</h3><p>Keys or clicks not responding.</p></article>
+        <article><h3>Printing</h3><p>Stuck jobs, jams and wrong printer.</p></article>
+        <article><h3>Network and VPN</h3><p>No internet or cannot connect.</p></article>
+      </div>
+    </section>
+
+    <section class="wrap" id="contact">
+      <h2>Contact IT</h2>
+      <p>Need a person right away? Open the assistant and say so, and it will create a ticket for you.</p>
+    </section>
+  </main>
+
+  <footer><div class="wrap">A learning project by an NBB service team member. Not official, and no real staff data is used.</div></footer>
+
+  <!-- chat widget -->
+  <button id="chat-toggle" class="chat-toggle" aria-label="Open chat">Chat</button>
+  <section id="chat" class="chat" hidden aria-label="IT help chat">
+    <div class="chat-head">
+      <strong>IT help assistant</strong>
+      <button id="chat-close" aria-label="Close chat">Close</button>
+    </div>
+    <div id="log" class="log" aria-live="polite"></div>
+    <form id="ticket-form" class="ticket" hidden>
+      <p>Leave your details and the IT team will contact you.</p>
+      <input id="t-name" placeholder="Your name" maxlength="80" required>
+      <input id="t-contact" placeholder="Extension or email" maxlength="120" required>
+      <input id="t-place" placeholder="Department and desk or floor" maxlength="120">
+      <button class="primary" type="submit">Send to IT team</button>
+    </form>
+    <form id="chat-form" class="compose">
+      <input id="msg" placeholder="Describe the problem" maxlength="1000" autocomplete="off" required>
+      <button class="primary" type="submit">Send</button>
+    </form>
+    <p class="warn">Never type passwords in this chat.</p>
+  </section>
+
+  <script src="/chat.js"></script>
+</body>
+</html>

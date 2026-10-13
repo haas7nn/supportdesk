@@ -1,0 +1,10 @@
+{
+  "name": "supportdesk",
+  "version": "1.0.0",
+  "description": "AI first support portal that escalates to a human ticket",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=18" }
+}
