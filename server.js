@@ -26,9 +26,16 @@ const MAX_MESSAGES = 20;
 
 const SYSTEM_PROMPT = [
   "You are the first line IT help assistant for staff, in a student project that imitates an NBB internal helpdesk. Say so if asked whether you are the real NBB system.",
-  "Answer only using the help articles below. Give simple steps a non technical person can follow, and keep answers short and friendly. Write plain text only, no markdown, no asterisks, no bullet symbols, and number steps like 1. 2. 3. on separate lines.",
+  "Write plain text only, no markdown, no asterisks, no bullet symbols. Number steps like 1. 2. 3. on separate lines. Keep answers short, calm and friendly.",
   "Never ask for or accept passwords. If the user shares one, tell them not to.",
-  "If the problem is not in the articles, the steps did not work, the user says it is urgent, or the user asks for a person, reply with one short sentence saying you are creating a ticket for the IT team, and end your reply with " + ESCALATE_TAG + ".",
+  "How to help:",
+  "1. If a help article below fits, use it.",
+  "2. If no article fits, still try to help. Give 2 or 3 safe general steps for common office problems, such as closing and reopening the app, signing out and back in, checking the internet or VPN, updating the app, or restarting the computer. Then ask them to tell you if it worked.",
+  "3. Do not pass the problem on at the first message. Pass it on only when the employee asks for a person, says your steps did not work, reports a security problem (a suspicious email, a lost device, a hacked account), or the fix needs IT to act (new software, new access rights, broken hardware).",
+  "4. Greetings and thanks get a normal friendly reply. Never pass those on.",
+  "5. If the employee is rude or frustrated, stay polite, do not argue, and offer the next step or the next fix.",
+  "6. Answer only the latest message. Earlier messages are history, so do not repeat what you said before.",
+  "When you do pass it on, reply with one short sentence saying you are creating a ticket for the IT team, and end your reply with " + ESCALATE_TAG + ".",
   "",
   "Help articles:",
   ...KNOWLEDGE.map((k) => "- " + k.topic + ": " + k.answer),
@@ -58,6 +65,9 @@ function plain(text) {
 // Used when there is no API key, so the demo still works. Picks the article with the most keyword hits.
 function keywordAnswer(text) {
   const words = text.toLowerCase();
+  if (/^\s*(hi|hello|hey|hola|salam|good (morning|afternoon|evening)|thanks|thank you)\b/.test(words) && words.length < 30) {
+    return { reply: "Hello! Tell me what is not working, for example Outlook, Teams, a keyboard or a printer.", escalate: false };
+  }
   let best = null;
   let bestScore = 0;
   for (const item of KNOWLEDGE) {
@@ -162,13 +172,15 @@ function callAI(messages, system) {
 
 async function answer(messages) {
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
-  if (!AI_ON) return keywordAnswer(lastUser.content);
+  // Messages from the same side are merged for the AI, but keyword matching only needs the newest line.
+  const newest = lastUser.content.split("\n").pop();
+  if (!AI_ON) return keywordAnswer(newest);
   try {
     return await callAI(messages, SYSTEM_PROMPT);
   } catch (err) {
     console.error(err.message);
     // If the AI is down, fall back so the employee is never stuck.
-    return keywordAnswer(lastUser.content);
+    return keywordAnswer(newest);
   }
 }
 
@@ -349,17 +361,23 @@ function newConversation() {
   return conv;
 }
 
-function addMessage(conv, role, content) {
-  conv.messages.push({ role, content: String(content).slice(0, 1000), at: Date.now() });
+function addMessage(conv, role, content, extra) {
+  conv.messages.push({ role, content: String(content).slice(0, 1000), at: Date.now(), ...extra });
   conv.updatedAt = Date.now();
   saveConversations();
 }
 
 // What the AI should see: the IT team counts as the assistant side, system notes are left out.
 function forAI(conv) {
-  const mapped = conv.messages
-    .filter((m) => m.role !== "system")
-    .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.content }));
+  // The "I am creating a ticket" lines are left out, otherwise the AI copies them again and again.
+  const mapped = [];
+  for (const m of conv.messages) {
+    if (m.role === "system" || m.esc) continue;
+    const role = m.role === "user" ? "user" : "assistant";
+    const last = mapped[mapped.length - 1];
+    if (last && last.role === role) last.content += "\n" + m.content;
+    else mapped.push({ role, content: m.content });
+  }
   return cleanMessages(mapped.slice(-MAX_MESSAGES));
 }
 
@@ -400,7 +418,7 @@ const server = http.createServer(async (req, res) => {
       // When a person has taken over, the bot stays quiet.
       if (conv.mode === "bot") {
         const result = await answer(forAI(conv));
-        addMessage(conv, "assistant", result.reply);
+        addMessage(conv, "assistant", result.reply, result.escalate ? { esc: true } : undefined);
         if (result.escalate) conv.needsHuman = true;
       }
       return sendJson(res, 200, { id: conv.id, ...publicView(conv, conv.messages.length) });

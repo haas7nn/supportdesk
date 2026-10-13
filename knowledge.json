@@ -1,37 +1,135 @@
 [
   {
     "topic": "Outlook not updating or not receiving email",
-    "keywords": ["outlook", "email", "emails", "mail", "inbox", "sync", "updating", "receiving"],
+    "keywords": [
+      "outlook",
+      "email",
+      "emails",
+      "mail",
+      "inbox",
+      "sync",
+      "updating",
+      "receiving"
+    ],
     "answer": "Check the bottom bar of Outlook. If it says Working Offline or Disconnected, go to the Send/Receive tab and click Work Offline to turn it off. If it still does not update, close Outlook completely, wait 10 seconds and open it again. Also check you are connected to the office network or VPN."
   },
   {
     "topic": "Keyboard not working",
-    "keywords": ["keyboard", "keys", "typing", "type"],
+    "keywords": [
+      "keyboard",
+      "keys",
+      "typing",
+      "type"
+    ],
     "answer": "Unplug the keyboard and plug it into a different USB port. For a wireless keyboard, replace the batteries and check the small USB receiver is plugged in. If only some keys fail, check Num Lock and Caps Lock. If a laptop keyboard fails, restart once. If none of this works, I will pass this to the IT team to swap it."
   },
   {
     "topic": "Mouse not working",
-    "keywords": ["mouse", "cursor", "pointer", "click"],
+    "keywords": [
+      "mouse",
+      "cursor",
+      "pointer",
+      "click"
+    ],
     "answer": "Unplug and replug the mouse, or try another USB port. For a wireless mouse, change the batteries and check the receiver. Try the mouse on a different surface, since glossy desks can confuse it."
   },
   {
     "topic": "Computer is slow or frozen",
-    "keywords": ["slow", "frozen", "freeze", "hang", "stuck", "lag", "not responding"],
+    "keywords": [
+      "slow",
+      "frozen",
+      "freeze",
+      "hang",
+      "stuck",
+      "lag",
+      "not responding"
+    ],
     "answer": "Save your work, then restart the computer. A restart fixes most slow computers, and many people go weeks without one. Close programs you are not using. If a single program is frozen, press Ctrl, Shift and Esc, select it and choose End task."
   },
   {
     "topic": "Cannot print",
-    "keywords": ["print", "printer", "printing", "paper", "queue"],
+    "keywords": [
+      "print",
+      "printer",
+      "printing",
+      "paper",
+      "queue"
+    ],
     "answer": "Check the printer screen for a paper jam, empty paper or low toner message. On your computer, open the print queue and cancel any stuck jobs, then try again. Check you picked the right printer in the print window."
   },
   {
     "topic": "No internet or Wi-Fi",
-    "keywords": ["internet", "wifi", "wi-fi", "network", "connection", "vpn", "connect"],
+    "keywords": [
+      "internet",
+      "wifi",
+      "wi-fi",
+      "network",
+      "connection",
+      "vpn",
+      "connect"
+    ],
     "answer": "Turn Wi-Fi off and on again, or unplug and replug the network cable. Restart the computer once. If other people near you are also offline, tell me, because it is probably a wider issue for the IT team."
   },
   {
     "topic": "Forgot or locked password",
-    "keywords": ["password", "locked", "forgot", "login", "sign in", "account"],
+    "keywords": [
+      "password",
+      "locked",
+      "forgot",
+      "login",
+      "sign in",
+      "account"
+    ],
     "answer": "Wait 30 minutes after too many wrong attempts and the account unlocks by itself. To reset your password now, use the self service reset page on the intranet. Never type your password into this chat."
+  },
+  {
+    "topic": "Microsoft Teams not working",
+    "keywords": [
+      "teams",
+      "meeting",
+      "call",
+      "video",
+      "camera",
+      "microphone",
+      "mic"
+    ],
+    "answer": "Close Teams completely by right clicking its icon near the clock and choosing Quit, then open it again. If it still fails, sign out of Teams and sign back in. For no sound or camera in a call, open Settings, then Devices, and pick the right headset or camera. Restart the computer if nothing else works."
+  },
+  {
+    "topic": "Screen or monitor shows nothing",
+    "keywords": [
+      "monitor",
+      "screen",
+      "display",
+      "black",
+      "blank",
+      "projector"
+    ],
+    "answer": "Check the screen is switched on and the cable is pushed in firmly at both ends. Press the Windows key and P together and choose Duplicate or Extend. If you can, try another cable or port. A cracked screen needs IT to replace it."
+  },
+  {
+    "topic": "No sound or headset not working",
+    "keywords": [
+      "sound",
+      "audio",
+      "headset",
+      "headphones",
+      "speaker",
+      "volume"
+    ],
+    "answer": "Check the volume is not muted. Right click the speaker icon near the clock and pick the right output device. Unplug the headset and plug it into another USB port."
+  },
+  {
+    "topic": "Word or Excel crashing",
+    "keywords": [
+      "word",
+      "excel",
+      "powerpoint",
+      "office",
+      "crash",
+      "crashing",
+      "closes"
+    ],
+    "answer": "Save your work and close all Office programs, then open the one you need again. Hold the Ctrl key while opening it to start in safe mode. If it keeps crashing, restart the computer."
   }
 ]
