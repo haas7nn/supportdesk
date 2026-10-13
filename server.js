@@ -196,7 +196,7 @@ function fallbackSummary(transcript) {
 
 async function summarize(transcript) {
   if (!AI_ON || transcript.length === 0) return fallbackSummary(transcript);
-  const text = transcript.map((m) => (m.role === "user" ? "Employee: " : "Assistant: ") + m.content).join("\n");
+  const text = transcript.filter((m) => m.role !== "system").map((m) => (m.role === "user" ? "Employee: " : m.role === "agent" ? "IT team: " : "Assistant: ") + m.content).join("\n");
   try {
     const out = await callAI([{ role: "user", content: text }], SUMMARY_PROMPT);
     return out.reply.slice(0, 600) || fallbackSummary(transcript);
@@ -305,28 +305,128 @@ function tooMany(req, bucket, max, windowMs) {
 }
 setInterval(() => hits.clear(), 60 * 60 * 1000).unref();
 
+// ---------- live conversations ----------
+// Every chat is stored on the server, so the IT team can read it, take over from the bot and reply.
+// Roles: user (employee), assistant (bot), agent (IT team member), system (notes like "joined the chat").
+
+const CONV_FILE = path.join(__dirname, "conversations.json");
+const MAX_CONVERSATIONS = 300;
+const MAX_CONV_MESSAGES = 100;
+const conversations = new Map();
+
+try {
+  for (const c of JSON.parse(fs.readFileSync(CONV_FILE, "utf8"))) conversations.set(c.id, c);
+} catch {
+  // first run, nothing saved yet
+}
+
+let saveTimer = null;
+function saveConversations() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    fs.writeFile(CONV_FILE, JSON.stringify([...conversations.values()]), (err) => {
+      if (err) console.error("Could not save conversations: " + err.message);
+    });
+  }, 300);
+}
+
+function newConversation() {
+  const conv = {
+    id: crypto.randomUUID(),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    mode: "bot", // bot or human
+    needsHuman: false,
+    name: "",
+    ticketId: "",
+    messages: [],
+  };
+  conversations.set(conv.id, conv);
+  if (conversations.size > MAX_CONVERSATIONS) {
+    const oldest = [...conversations.values()].sort((a, b) => a.updatedAt - b.updatedAt)[0];
+    conversations.delete(oldest.id);
+  }
+  return conv;
+}
+
+function addMessage(conv, role, content) {
+  conv.messages.push({ role, content: String(content).slice(0, 1000), at: Date.now() });
+  conv.updatedAt = Date.now();
+  saveConversations();
+}
+
+// What the AI should see: the IT team counts as the assistant side, system notes are left out.
+function forAI(conv) {
+  const mapped = conv.messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.content }));
+  return cleanMessages(mapped.slice(-MAX_MESSAGES));
+}
+
+function publicView(conv, since) {
+  return {
+    mode: conv.mode,
+    needsHuman: conv.needsHuman,
+    ticketId: conv.ticketId,
+    count: conv.messages.length,
+    messages: conv.messages.slice(since).map((m) => ({ role: m.role, content: m.content, at: m.at })),
+  };
+}
+
+function requireJson(req) {
+  return String(req.headers["content-type"] || "").startsWith("application/json");
+}
+
 // ---------- routes ----------
 
 const server = http.createServer(async (req, res) => {
   try {
-    if (req.method === "POST" && req.url === "/api/chat") {
-      if (tooMany(req, "chat", 20, 60 * 1000)) return sendJson(res, 429, { error: "Too many messages, please wait a minute." });
+    const url = new URL(req.url, "http://localhost");
+    const pathname = url.pathname;
+    const since = Math.max(0, parseInt(url.searchParams.get("since") || "0", 10) || 0);
+
+    // employee sends a message
+    if (req.method === "POST" && pathname === "/api/chat") {
+      if (tooMany(req, "chat", 30, 60 * 1000)) return sendJson(res, 429, { error: "Too many messages, please wait a minute." });
       const body = await readBody(req);
-      const messages = cleanMessages(body.messages);
-      if (!messages) return sendJson(res, 400, { error: "Send at least one user message." });
-      return sendJson(res, 200, await answer(messages));
+      const text = String(body.text || "").trim().slice(0, 1000);
+      if (!text) return sendJson(res, 400, { error: "Write a message first." });
+      let conv = conversations.get(String(body.id || ""));
+      if (!conv) conv = newConversation();
+      if (conv.messages.length >= MAX_CONV_MESSAGES) {
+        return sendJson(res, 400, { error: "This chat is full. Please send a ticket to the IT team." });
+      }
+      addMessage(conv, "user", text);
+      // When a person has taken over, the bot stays quiet.
+      if (conv.mode === "bot") {
+        const result = await answer(forAI(conv));
+        addMessage(conv, "assistant", result.reply);
+        if (result.escalate) conv.needsHuman = true;
+      }
+      return sendJson(res, 200, { id: conv.id, ...publicView(conv, conv.messages.length) });
     }
 
-    if (req.method === "POST" && req.url === "/api/ticket") {
+    // employee page asks for anything new
+    const poll = pathname.match(/^\/api\/chat\/([\w-]+)$/);
+    if (req.method === "GET" && poll) {
+      if (tooMany(req, "poll", 120, 60 * 1000)) return sendJson(res, 429, { error: "Slow down." });
+      const conv = conversations.get(poll[1]);
+      if (!conv) return sendJson(res, 404, { error: "Chat not found." });
+      return sendJson(res, 200, publicView(conv, since));
+    }
+
+    // employee sends the ticket form
+    if (req.method === "POST" && pathname === "/api/ticket") {
       if (tooMany(req, "ticket", 5, 60 * 60 * 1000)) return sendJson(res, 429, { error: "Too many tickets, please try later." });
       const body = await readBody(req);
+      const conv = conversations.get(String(body.id || ""));
+      if (!conv) return sendJson(res, 400, { error: "Start a chat first." });
+      if (conv.ticketId) return sendJson(res, 200, { id: conv.ticketId });
       const name = String(body.name || "").trim().slice(0, 80);
       const contact = String(body.contact || "").trim().slice(0, 120);
       const place = String(body.place || "").trim().slice(0, 120);
       if (!name || !contact) return sendJson(res, 400, { error: "Name and contact are required." });
-      const transcript = (Array.isArray(body.transcript) ? body.transcript : [])
-        .slice(-MAX_MESSAGES)
-        .map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content || "").slice(0, 1000) }));
+      const transcript = conv.messages.filter((m) => m.role !== "system").map((m) => ({ role: m.role, content: m.content }));
       const tickets = readTickets();
       const ticket = {
         id: "T" + String(tickets.length + 1).padStart(4, "0"),
@@ -335,20 +435,87 @@ const server = http.createServer(async (req, res) => {
         name,
         contact,
         place,
+        conversationId: conv.id,
         summary: await summarize(transcript),
         transcript,
       };
       tickets.push(ticket);
       saveTickets(tickets);
+      conv.ticketId = ticket.id;
+      conv.name = name;
+      conv.needsHuman = true;
+      conv.updatedAt = Date.now();
+      saveConversations();
       return sendJson(res, 201, { id: ticket.id });
     }
 
-    if (req.method === "GET" && req.url === "/api/tickets") {
+    // everything below is for the IT team only
+    if (pathname === "/api/tickets" || pathname.startsWith("/api/conversations") || pathname === "/agent.html") {
       if (!isAdmin(req)) return askForPassword(res);
+    }
+
+    if (req.method === "GET" && pathname === "/api/tickets") {
       return sendJson(res, 200, readTickets().reverse());
     }
 
-    if (req.method === "GET" && req.url.split("?")[0] === "/agent.html" && !isAdmin(req)) return askForPassword(res);
+    if (req.method === "GET" && pathname === "/api/conversations") {
+      const list = [...conversations.values()]
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .map((c) => {
+          const last = [...c.messages].reverse().find((m) => m.role !== "system");
+          return {
+            id: c.id,
+            name: c.name,
+            ticketId: c.ticketId,
+            mode: c.mode,
+            needsHuman: c.needsHuman,
+            updatedAt: c.updatedAt,
+            count: c.messages.length,
+            preview: last ? last.content.slice(0, 80) : "",
+          };
+        });
+      return sendJson(res, 200, list);
+    }
+
+    const one = pathname.match(/^\/api\/conversations\/([\w-]+)(?:\/(takeover|reply|handback))?$/);
+    if (one) {
+      const conv = conversations.get(one[1]);
+      if (!conv) return sendJson(res, 404, { error: "Chat not found." });
+      const action = one[2];
+
+      if (req.method === "GET" && !action) return sendJson(res, 200, { id: conv.id, name: conv.name, ticketId: conv.ticketId, ...publicView(conv, since) });
+
+      // These change things, so they must be sent as JSON. A page on another site cannot do that with our password.
+      if (req.method === "POST" && action) {
+        if (!requireJson(req)) return sendJson(res, 415, { error: "Send JSON." });
+        if (action === "takeover") {
+          if (conv.mode !== "human") {
+            conv.mode = "human";
+            addMessage(conv, "system", "An IT team member has joined the chat.");
+          }
+          return sendJson(res, 200, publicView(conv, since));
+        }
+        if (action === "handback") {
+          if (conv.mode !== "bot") {
+            conv.mode = "bot";
+            conv.needsHuman = false;
+            addMessage(conv, "system", "You are back with the assistant.");
+          }
+          return sendJson(res, 200, publicView(conv, since));
+        }
+        if (action === "reply") {
+          const body = await readBody(req);
+          const text = String(body.text || "").trim();
+          if (!text) return sendJson(res, 400, { error: "Write a reply first." });
+          if (conv.mode !== "human") return sendJson(res, 409, { error: "Take over the chat first." });
+          if (conv.messages.length >= MAX_CONV_MESSAGES) return sendJson(res, 400, { error: "This chat is full." });
+          addMessage(conv, "agent", text);
+          conv.needsHuman = false;
+          return sendJson(res, 200, publicView(conv, since));
+        }
+      }
+    }
+
     if (req.method === "GET") return serveStatic(req, res);
     res.writeHead(405).end("Method not allowed");
   } catch (err) {

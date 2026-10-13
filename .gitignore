@@ -1,3 +1,4 @@
+.env
+conversations.json
 node_modules
 tickets.json
-.env

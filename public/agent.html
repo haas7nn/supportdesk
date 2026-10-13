@@ -23,12 +23,41 @@
   <main class="wrap">
     <div class="page-head">
       <div>
-        <h1>IT team tickets</h1>
-        <p>Only the problems the assistant could not solve appear here. Each ticket has a short note and the full chat, so nobody has to ask again.</p>
+        <h1>IT team</h1>
+        <p>Watch chats as they happen, take over from the assistant and reply yourself. Problems the assistant could not solve also become tickets with a short note.</p>
       </div>
       <div class="count" id="count" hidden></div>
     </div>
-    <div id="list" class="tickets">Loading...</div>
+
+    <div class="tabs" role="tablist">
+      <button class="tab on" id="tab-live" role="tab">Live chats <span class="pill" id="live-pill" hidden></span></button>
+      <button class="tab" id="tab-tickets" role="tab">Tickets</button>
+    </div>
+
+    <section id="live" class="live">
+      <div class="convs" id="convs">Loading...</div>
+      <div class="thread-box" id="thread-box">
+        <div class="empty" id="empty">Pick a chat on the left to read it.</div>
+        <div id="open" hidden>
+          <div class="thread-head">
+            <div><strong id="th-name"></strong><div class="meta" id="th-meta"></div></div>
+            <div class="actions">
+              <button class="primary" id="take">Take over</button>
+              <button class="ghost" id="back">Hand back to bot</button>
+            </div>
+          </div>
+          <div class="thread" id="thread"></div>
+          <form class="composer" id="composer">
+            <input id="reply" placeholder="Take over first, then write to the employee" maxlength="1000" autocomplete="off" disabled>
+            <button class="primary" id="send" type="submit" disabled>Send</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section id="tickets" hidden>
+      <div id="list" class="tickets">Loading...</div>
+    </section>
   </main>
 
   <footer><div class="wrap">A learning project by an NBB service team member. Not official, and no real staff data is used.</div></footer>
@@ -103,12 +132,151 @@
       list.textContent = "";
       count.hidden = false;
       count.textContent = tickets.length + (tickets.length === 1 ? " ticket" : " tickets");
+      ticketCount = tickets.length;
       if (!tickets.length) {
         list.textContent = "No tickets yet.";
         return;
       }
       for (const t of tickets) list.append(ticketCard(t));
     }).catch(() => { list.textContent = "Could not load tickets."; });
+
+    // ---------- tabs ----------
+    let ticketCount = 0;
+    const live = document.getElementById("live");
+    const ticketsBox = document.getElementById("tickets");
+    function showTab(name) {
+      const isLive = name === "live";
+      live.hidden = !isLive;
+      ticketsBox.hidden = isLive;
+      document.getElementById("tab-live").classList.toggle("on", isLive);
+      document.getElementById("tab-tickets").classList.toggle("on", !isLive);
+    }
+    document.getElementById("tab-live").onclick = () => showTab("live");
+    document.getElementById("tab-tickets").onclick = () => showTab("tickets");
+
+    // ---------- live chats ----------
+    const convsBox = document.getElementById("convs");
+    const openBox = document.getElementById("open");
+    const emptyBox = document.getElementById("empty");
+    const thread = document.getElementById("thread");
+    const replyInput = document.getElementById("reply");
+    const sendBtn = document.getElementById("send");
+    const takeBtn = document.getElementById("take");
+    const backBtn = document.getElementById("back");
+    let selected = null;
+
+    function ago(ms) {
+      const sec = Math.max(0, Math.round((Date.now() - ms) / 1000));
+      if (sec < 60) return "just now";
+      if (sec < 3600) return Math.round(sec / 60) + " min ago";
+      if (sec < 86400) return Math.round(sec / 3600) + " h ago";
+      return Math.round(sec / 86400) + " d ago";
+    }
+
+    async function api(path, body) {
+      const res = await fetch(path, body === undefined ? {} : {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Request failed");
+      return res.json();
+    }
+
+    function drawList(items) {
+      const waiting = items.filter((c) => c.needsHuman && c.mode !== "human").length;
+      const pill = document.getElementById("live-pill");
+      pill.hidden = waiting === 0;
+      pill.textContent = waiting;
+      convsBox.textContent = "";
+      if (!items.length) {
+        convsBox.textContent = "No chats yet. They appear here as soon as an employee writes.";
+        return;
+      }
+      for (const c of items) {
+        const row = document.createElement("button");
+        row.className = "conv" + (c.id === selected ? " sel" : "");
+        const top = document.createElement("div");
+        top.className = "conv-top";
+        const name = document.createElement("strong");
+        name.textContent = c.name || "Employee " + c.id.slice(0, 4);
+        const state = document.createElement("span");
+        state.className = "state " + (c.mode === "human" ? "human" : c.needsHuman ? "wait" : "bot");
+        state.textContent = c.mode === "human" ? "You" : c.needsHuman ? "Needs a person" : "Bot";
+        top.append(name, state);
+        const prev = document.createElement("div");
+        prev.className = "preview";
+        prev.textContent = c.preview || "No messages";
+        const when = document.createElement("div");
+        when.className = "meta";
+        when.textContent = ago(c.updatedAt) + (c.ticketId ? " · " + c.ticketId : "");
+        row.append(top, prev, when);
+        row.onclick = () => select(c.id);
+        convsBox.append(row);
+      }
+    }
+
+    async function refreshList() {
+      try { drawList(await api("/api/conversations")); } catch { /* try again next tick */ }
+    }
+
+    function drawThread(c) {
+      document.getElementById("th-name").textContent = c.name || "Employee " + c.id.slice(0, 4);
+      document.getElementById("th-meta").textContent = (c.ticketId ? "Ticket " + c.ticketId + " · " : "") + (c.mode === "human" ? "You are in this chat" : "The bot is answering");
+      const atBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 40;
+      thread.textContent = "";
+      for (const m of c.messages) {
+        const b = document.createElement("div");
+        b.className = "tb " + m.role;
+        if (m.role !== "system") {
+          const who = document.createElement("small");
+          who.textContent = m.role === "user" ? "Employee" : m.role === "agent" ? "IT team" : "Bot";
+          b.append(who);
+        }
+        b.append(document.createTextNode(m.content));
+        thread.append(b);
+      }
+      if (atBottom) thread.scrollTop = thread.scrollHeight;
+      const human = c.mode === "human";
+      replyInput.disabled = !human;
+      sendBtn.disabled = !human;
+      takeBtn.hidden = human;
+      backBtn.hidden = !human;
+      replyInput.placeholder = human ? "Write to the employee" : "Take over first, then write to the employee";
+    }
+
+    async function loadThread() {
+      if (!selected) return;
+      try { drawThread(await api("/api/conversations/" + selected)); } catch { /* try again next tick */ }
+    }
+
+    async function select(id) {
+      selected = id;
+      emptyBox.hidden = true;
+      openBox.hidden = false;
+      thread.scrollTop = 1e9;
+      await loadThread();
+      thread.scrollTop = thread.scrollHeight;
+      refreshList();
+    }
+
+    takeBtn.onclick = async () => {
+      try { await api("/api/conversations/" + selected + "/takeover", {}); await loadThread(); replyInput.focus(); refreshList(); } catch (e) { alert(e.message); }
+    };
+    backBtn.onclick = async () => {
+      try { await api("/api/conversations/" + selected + "/handback", {}); await loadThread(); refreshList(); } catch (e) { alert(e.message); }
+    };
+    document.getElementById("composer").onsubmit = async (e) => {
+      e.preventDefault();
+      const text = replyInput.value.trim();
+      if (!text || !selected) return;
+      replyInput.value = "";
+      try { await api("/api/conversations/" + selected + "/reply", { text }); await loadThread(); thread.scrollTop = thread.scrollHeight; refreshList(); } catch (err) { replyInput.value = text; alert(err.message); }
+    };
+
+    refreshList();
+    setInterval(refreshList, 3000);
+    setInterval(loadThread, 2000);
   </script>
 </body>
 </html>
