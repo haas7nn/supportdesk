@@ -57,6 +57,18 @@ function saveTickets(list) {
 
 // ---------- the answer engine ----------
 
+// When someone asks for a person, we do not leave that to the AI. The server spots it and hands over at once.
+const WANTS_HUMAN = new RegExp(
+  [
+    "\\b(human(?! resources)|real person|live agent|real agent|technician|support staff)\\b",
+    "\\b(talk|speak|chat|connect|transfer|forward|pass|escalate|get|give)\\b.{0,30}\\b(person|people|agent|someone|somebody|it team|it support|it guy|staff|colleague|member)\\b",
+    "\\b(i|we)\\b.{0,12}\\b(want|need|prefer)\\b.{0,25}\\b(person|agent|human(?! resources)|someone|somebody|it team)\\b",
+    "(موظف|بشري|شخص حقيقي|اتكلم مع|أتحدث مع|اكلم|فريق الدعم)",
+  ].join("|"),
+  "i"
+);
+const HANDOVER_TEXT = "Of course, I am forwarding you to the IT team. Please leave your details below, and a team member will reply here or contact you.";
+
 // The chat box shows plain text, so remove any markdown the AI adds anyway.
 function plain(text) {
   return text.replace(/\*\*|__|`/g, "").replace(/^\s*[*#>]+\s+/gm, "").replace(/[ \t]+\n/g, "\n").trim();
@@ -416,7 +428,10 @@ const server = http.createServer(async (req, res) => {
       }
       addMessage(conv, "user", text);
       // When a person has taken over, the bot stays quiet.
-      if (conv.mode === "bot") {
+      if (conv.mode === "bot" && WANTS_HUMAN.test(text)) {
+        addMessage(conv, "assistant", HANDOVER_TEXT, { esc: true });
+        conv.needsHuman = true;
+      } else if (conv.mode === "bot") {
         const result = await answer(forAI(conv));
         addMessage(conv, "assistant", result.reply, result.escalate ? { esc: true } : undefined);
         if (result.escalate) conv.needsHuman = true;
