@@ -41,14 +41,30 @@ Every chat is stored on the server. On the IT team page, the Live chats tab list
 
 The employee page and the IT team page both ask the server for news every 2 to 3 seconds. That is simple polling, easy to explain, and fine for a small team.
 
+## Everything it can do
+
+For employees:
+* Chat with the assistant, in English or Arabic (the button in the top corner, the whole page flips).
+* After each answer, press Yes, fixed or No, still broken. No sends them to the IT team.
+* Say "I want a human" and the chat is handed over at once.
+* Attach a screenshot. The page shrinks it first, and the server only accepts real JPEG files.
+* Check a ticket with its number and the contact they gave.
+
+For the IT team (password protected):
+* Live chats with a Needs a person label, an Urgent label, a sound alert and a count in the tab title.
+* Take over, reply with saved replies, hand back to the bot, mark urgent.
+* Tickets with the Problem, Tried and Result note, and Mark solved or Open again.
+* Stats: chats, solved by the bot, needed a person, solve rate, and the most common problems.
+* Help articles: edit what the bot knows, in English and Arabic, with no code.
+
 ## Files
 
 | File | What it does |
 | --- | --- |
 | `server.js` | The whole backend, no packages needed |
-| `knowledge.json` | The help articles, edit these to teach the assistant |
+| `knowledge.json`, `knowledge.js` | The help articles, and the code that loads, checks and matches them |
 | `public/index.html`, `style.css` | The portal page |
-| `public/chat.js` | The chat widget |
+| `public/chat.js`, `public/i18n.js` | The chat widget, and the English and Arabic texts |
 | `public/agent.html` | The IT team page, live chats and tickets |
 
 ## Safety choices worth mentioning
@@ -61,7 +77,7 @@ The employee page and the IT team page both ask the server for news every 2 to 3
 
 ## Ideas for next steps
 
-* Add more help articles to `knowledge.json`.
-* Add a ticket status button (open, solved).
-* Add Arabic.
+* A login for each IT team member, instead of one shared password.
+* A real database, so chats and tickets survive restarts.
+* Email alerts for urgent chats.
 * Add more problems to `knowledge.json` from the tickets the team sees most often.

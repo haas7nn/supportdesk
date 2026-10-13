@@ -16,15 +16,17 @@ const GEMINI_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const PUBLIC_DIR = path.join(__dirname, "public");
 const TICKETS_FILE = path.join(__dirname, "tickets.json");
-const KNOWLEDGE = JSON.parse(fs.readFileSync(path.join(__dirname, "knowledge.json"), "utf8"));
+const knowledge = require("./knowledge");
+const UPLOAD_DIR = path.join(__dirname, "uploads");
 
 const AI_TIMEOUT_MS = 15000; // if the AI is slower than this, use the keyword answer instead
-const NOT_FOUND_TEXT = "I could not find a fix for that, so I will create a ticket for the IT team.";
 const ESCALATE_TAG = "[ESCALATE]";
 const MAX_BODY = 20000;
+const MAX_IMAGE_BODY = 700000; // a screenshot sent as text, about 500 KB of picture
 const MAX_MESSAGES = 20;
 
-const SYSTEM_PROMPT = [
+function systemPrompt() {
+  return [
   "You are the first line IT help assistant for staff, in a student project that imitates an NBB internal helpdesk. Say so if asked whether you are the real NBB system.",
   "Write plain text only, no markdown, no asterisks, no bullet symbols. Number steps like 1. 2. 3. on separate lines. Keep answers short, calm and friendly.",
   "Never ask for or accept passwords. If the user shares one, tell them not to.",
@@ -34,12 +36,14 @@ const SYSTEM_PROMPT = [
   "3. Do not pass the problem on at the first message. Pass it on only when the employee asks for a person, says your steps did not work, reports a security problem (a suspicious email, a lost device, a hacked account), or the fix needs IT to act (new software, new access rights, broken hardware).",
   "4. Greetings and thanks get a normal friendly reply. Never pass those on.",
   "5. If the employee is rude or frustrated, stay polite, do not argue, and offer the next step or the next fix.",
-  "6. Answer only the latest message. Earlier messages are history, so do not repeat what you said before.",
+  "6. Reply in the language the employee writes in, English or Arabic.",
+  "7. Answer only the latest message. Earlier messages are history, so do not repeat what you said before.",
   "When you do pass it on, reply with one short sentence saying you are creating a ticket for the IT team, and end your reply with " + ESCALATE_TAG + ".",
   "",
   "Help articles:",
-  ...KNOWLEDGE.map((k) => "- " + k.topic + ": " + k.answer),
+  ...knowledge.promptList(),
 ].join("\n");
+}
 
 // ---------- tickets (a JSON file keeps it simple and easy to explain) ----------
 
@@ -57,6 +61,19 @@ function saveTickets(list) {
 
 // ---------- the answer engine ----------
 
+// Every message the bot writes by itself comes in English and Arabic. It picks by the employee's own words.
+const TEXT = {
+  notFound: ["I could not find a fix for that, so I will create a ticket for the IT team.", "لم أجد حلاً لهذه المشكلة، لذلك سأنشئ تذكرة لفريق تقنية المعلومات."],
+  handover: ["Of course, I am forwarding you to the IT team. Please leave your details below, and a team member will reply here or contact you.", "بكل سرور، سأحوّلك إلى فريق تقنية المعلومات. اترك بياناتك في الأسفل وسيرد عليك أحد أفراد الفريق هنا أو يتواصل معك."],
+  fixed: ["Great, I am glad it is fixed. Write here any time you need help.", "ممتاز، يسعدني أن المشكلة حُلّت. اكتب هنا في أي وقت تحتاج فيه مساعدة."],
+  notFixed: ["Sorry about that. Please leave your details below, and the IT team will help you.", "نعتذر عن ذلك. اترك بياناتك في الأسفل وسيساعدك فريق تقنية المعلومات."],
+  image: ["Thanks, your screenshot is saved for the IT team. Please also tell me in words what is wrong, and I will try to help.", "شكراً، تم حفظ لقطة الشاشة لفريق تقنية المعلومات. أخبرني أيضاً بالكلمات ما المشكلة وسأحاول المساعدة."],
+};
+const pick = (key, hint) => TEXT[key][knowledge.isArabic(hint || "") ? 1 : 0];
+const recentText = (conv) => conv.messages.filter((m) => m.role === "user").slice(-3).map((m) => m.content).join(" ");
+
+const URGENT = /\b(urgent|urgently|asap|emergency|critical|immediately|right now)\b|\b(everyone|everybody|whole (team|department|floor|branch)|all of us|nobody|no one)\b.{0,30}\b(can'?t|cannot|unable|down|not working)\b|(عاجل|ضروري|الجميع|الكل)/i;
+
 // When someone asks for a person, we do not leave that to the AI. The server spots it and hands over at once.
 const WANTS_HUMAN = new RegExp(
   [
@@ -67,35 +84,13 @@ const WANTS_HUMAN = new RegExp(
   ].join("|"),
   "i"
 );
-const HANDOVER_TEXT = "Of course, I am forwarding you to the IT team. Please leave your details below, and a team member will reply here or contact you.";
 
 // The chat box shows plain text, so remove any markdown the AI adds anyway.
 function plain(text) {
   return text.replace(/\*\*|__|`/g, "").replace(/^\s*[*#>]+\s+/gm, "").replace(/[ \t]+\n/g, "\n").trim();
 }
 
-// Used when there is no API key, so the demo still works. Picks the article with the most keyword hits.
-function keywordAnswer(text) {
-  const words = text.toLowerCase();
-  if (/^\s*(hi|hello|hey|hola|salam|good (morning|afternoon|evening)|thanks|thank you)\b/.test(words) && words.length < 30) {
-    return { reply: "Hello! Tell me what is not working, for example Outlook, Teams, a keyboard or a printer.", escalate: false };
-  }
-  let best = null;
-  let bestScore = 0;
-  for (const item of KNOWLEDGE) {
-    const score = item.keywords.filter((k) => words.includes(k)).length;
-    if (score > bestScore) {
-      best = item;
-      bestScore = score;
-    }
-  }
-  if (!best) {
-    return { reply: NOT_FOUND_TEXT, escalate: true };
-  }
-  return { reply: best.answer, escalate: false };
-}
-
-async function aiAnswer(messages, system = SYSTEM_PROMPT) {
+async function aiAnswer(messages, system = systemPrompt()) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     signal: AbortSignal.timeout(AI_TIMEOUT_MS),
@@ -114,7 +109,7 @@ async function aiAnswer(messages, system = SYSTEM_PROMPT) {
 }
 
 // Google Gemini. It calls the assistant "model" instead of "assistant".
-async function geminiAnswer(messages, system = SYSTEM_PROMPT) {
+async function geminiAnswer(messages, system = systemPrompt()) {
   const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent";
   const res = await fetch(url, {
     method: "POST",
@@ -151,7 +146,7 @@ async function listGroqModels() {
   }
 }
 
-async function groqAnswer(messages, system = SYSTEM_PROMPT) {
+async function groqAnswer(messages, system = systemPrompt()) {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     signal: AbortSignal.timeout(AI_TIMEOUT_MS),
@@ -186,13 +181,13 @@ async function answer(messages) {
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
   // Messages from the same side are merged for the AI, but keyword matching only needs the newest line.
   const newest = lastUser.content.split("\n").pop();
-  if (!AI_ON) return keywordAnswer(newest);
+  if (!AI_ON) return knowledge.keywordAnswer(newest, pick("notFound", newest));
   try {
-    return await callAI(messages, SYSTEM_PROMPT);
+    return await callAI(messages, systemPrompt());
   } catch (err) {
     console.error(err.message);
     // If the AI is down, fall back so the employee is never stuck.
-    return keywordAnswer(newest);
+    return knowledge.keywordAnswer(newest, pick("notFound", newest));
   }
 }
 
@@ -207,10 +202,12 @@ const SUMMARY_PROMPT = [
   "Plain text only, under 70 words, never include passwords.",
 ].join("\n");
 
+const isBotNotice = (content) => Object.values(TEXT).some((pair) => pair.includes(content));
+
 // Used when the AI is off or fails. Plain and always available.
 function fallbackSummary(transcript) {
   const firstUser = transcript.find((m) => m.role === "user");
-  const lastBot = [...transcript].reverse().find((m) => m.role === "assistant" && m.content !== NOT_FOUND_TEXT);
+  const lastBot = [...transcript].reverse().find((m) => m.role === "assistant" && !isBotNotice(m.content));
   return [
     "Problem: " + (firstUser ? firstUser.content.slice(0, 200) : "not stated"),
     "Tried: " + (lastBot ? lastBot.content.slice(0, 250) : "none"),
@@ -249,13 +246,13 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-function readBody(req) {
+function readBody(req, max = MAX_BODY) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
     req.on("data", (c) => {
       size += c.length;
-      if (size > MAX_BODY) {
+      if (size > max) {
         reject(new Error("too large"));
         req.destroy();
         return;
@@ -361,6 +358,11 @@ function newConversation() {
     updatedAt: Date.now(),
     mode: "bot", // bot or human
     needsHuman: false,
+    everEscalated: false, // stays true even after hand back, used for the numbers on the Stats tab
+    tookOver: false,
+    outcome: "", // "solved" or "not_solved", from the Did that fix it buttons
+    priority: "normal", // normal or urgent
+    topic: "",
     name: "",
     ticketId: "",
     messages: [],
@@ -399,12 +401,49 @@ function publicView(conv, since) {
     needsHuman: conv.needsHuman,
     ticketId: conv.ticketId,
     count: conv.messages.length,
-    messages: conv.messages.slice(since).map((m) => ({ role: m.role, content: m.content, at: m.at })),
+    priority: conv.priority,
+    messages: conv.messages.slice(since).map((m, k) => ({ i: since + k, role: m.role, content: m.content, at: m.at, ask: Boolean(m.fb && !m.fbDone), img: m.img || "" })),
   };
+}
+
+function flagForPerson(conv) {
+  conv.needsHuman = true;
+  conv.everEscalated = true;
 }
 
 function requireJson(req) {
   return String(req.headers["content-type"] || "").startsWith("application/json");
+}
+
+// ---------- numbers for the Stats tab ----------
+
+function buildStats(range) {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const from = range === "today" ? startOfDay.getTime() : range === "week" ? Date.now() - 7 * 86400000 : 0;
+  const chats = [...conversations.values()].filter((c) => c.createdAt >= from && c.messages.some((m) => m.role === "user"));
+  const tickets = readTickets().filter((t) => new Date(t.createdAt).getTime() >= from);
+
+  // Every chat lands in exactly one group: needed a person, solved by the bot, or no answer given yet.
+  const needed = chats.filter((c) => c.everEscalated).length;
+  const solved = chats.filter((c) => !c.everEscalated && c.outcome === "solved").length;
+  const topics = {};
+  for (const c of chats) {
+    const t = c.topic || "Other";
+    topics[t] = (topics[t] || 0) + 1;
+  }
+  return {
+    range,
+    chats: chats.length,
+    solvedByBot: solved,
+    neededPerson: needed,
+    noAnswerYet: chats.length - solved - needed,
+    solveRate: solved + needed ? Math.round((solved / (solved + needed)) * 100) : null,
+    takenOver: chats.filter((c) => c.tookOver).length,
+    urgent: chats.filter((c) => c.priority === "urgent").length,
+    tickets: { total: tickets.length, open: tickets.filter((t) => t.status !== "solved").length, solved: tickets.filter((t) => t.status === "solved").length },
+    topTopics: Object.entries(topics).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([topic, count]) => ({ topic, count })),
+  };
 }
 
 // ---------- routes ----------
@@ -427,14 +466,18 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { error: "This chat is full. Please send a ticket to the IT team." });
       }
       addMessage(conv, "user", text);
+      if (URGENT.test(text)) conv.priority = "urgent";
+      if (!conv.topic && !knowledge.isGreeting(text)) conv.topic = knowledge.topicFor(text);
       // When a person has taken over, the bot stays quiet.
       if (conv.mode === "bot" && WANTS_HUMAN.test(text)) {
-        addMessage(conv, "assistant", HANDOVER_TEXT, { esc: true });
-        conv.needsHuman = true;
+        addMessage(conv, "assistant", pick("handover", text), { esc: true });
+        flagForPerson(conv);
       } else if (conv.mode === "bot") {
         const result = await answer(forAI(conv));
-        addMessage(conv, "assistant", result.reply, result.escalate ? { esc: true } : undefined);
-        if (result.escalate) conv.needsHuman = true;
+        // A real fix gets the "Did that fix it?" buttons, a greeting or a hand over does not.
+        const asksFeedback = !result.escalate && !knowledge.isGreeting(text);
+        addMessage(conv, "assistant", result.reply, result.escalate ? { esc: true } : asksFeedback ? { fb: true } : undefined);
+        if (result.escalate) flagForPerson(conv);
       }
       return sendJson(res, 200, { id: conv.id, ...publicView(conv, conv.messages.length) });
     }
@@ -446,6 +489,73 @@ const server = http.createServer(async (req, res) => {
       const conv = conversations.get(poll[1]);
       if (!conv) return sendJson(res, 404, { error: "Chat not found." });
       return sendJson(res, 200, publicView(conv, since));
+    }
+
+    // employee presses Yes or No on "Did that fix it?"
+    const feedback = pathname.match(/^\/api\/chat\/([\w-]+)\/feedback$/);
+    if (req.method === "POST" && feedback) {
+      if (tooMany(req, "poll", 120, 60 * 1000)) return sendJson(res, 429, { error: "Slow down." });
+      const conv = conversations.get(feedback[1]);
+      if (!conv) return sendJson(res, 404, { error: "Chat not found." });
+      const body = await readBody(req);
+      const m = conv.messages[Number(body.index)];
+      if (!m || m.role !== "assistant" || !m.fb || m.fbDone) return sendJson(res, 400, { error: "That was already answered." });
+      const helped = body.helped === true;
+      m.fbDone = helped ? "yes" : "no";
+      if (helped) {
+        conv.outcome = "solved";
+        conv.needsHuman = false;
+        addMessage(conv, "assistant", pick("fixed", recentText(conv)));
+      } else {
+        conv.outcome = "not_solved";
+        addMessage(conv, "assistant", pick("notFixed", recentText(conv)), { esc: true });
+        flagForPerson(conv);
+      }
+      return sendJson(res, 200, publicView(conv, since));
+    }
+
+    // employee attaches a screenshot (the page shrinks it to a small JPEG first)
+    const image = pathname.match(/^\/api\/chat\/([\w-]+)\/image$/);
+    if (req.method === "POST" && image) {
+      if (tooMany(req, "image", 8, 10 * 60 * 1000)) return sendJson(res, 429, { error: "Too many screenshots, please wait." });
+      const conv = conversations.get(image[1]);
+      if (!conv) return sendJson(res, 404, { error: "Chat not found." });
+      const body = await readBody(req, MAX_IMAGE_BODY);
+      const match = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(body.dataUrl || ""));
+      if (!match) return sendJson(res, 400, { error: "Only JPEG screenshots can be sent." });
+      const bytes = Buffer.from(match[1], "base64");
+      const isJpeg = bytes.length > 100 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+      if (!isJpeg || bytes.length > 500000) return sendJson(res, 400, { error: "That picture is not valid or is too big." });
+      if (conv.messages.filter((m) => m.img).length >= 5) return sendJson(res, 400, { error: "Up to 5 screenshots per chat." });
+      if (conv.messages.length >= MAX_CONV_MESSAGES - 1) return sendJson(res, 400, { error: "This chat is full. Please send a ticket to the IT team." });
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+      const name = crypto.randomUUID() + ".jpg";
+      fs.writeFileSync(path.join(UPLOAD_DIR, name), bytes);
+      addMessage(conv, "user", "Screenshot", { img: "/uploads/" + name });
+      if (conv.mode === "bot") addMessage(conv, "assistant", pick("image", recentText(conv)));
+      return sendJson(res, 200, publicView(conv, since));
+    }
+
+    // pictures are served by their long random name, nobody can guess one
+    const upload = pathname.match(/^\/uploads\/([0-9a-f-]{36}\.jpg)$/);
+    if (req.method === "GET" && upload) {
+      return fs.readFile(path.join(UPLOAD_DIR, upload[1]), (err, data) => {
+        if (err) return res.writeHead(404).end("Not found");
+        res.writeHead(200, { "content-type": "image/jpeg", "x-content-type-options": "nosniff", "cache-control": "private, max-age=3600" });
+        res.end(data);
+      });
+    }
+
+    // employee checks a ticket, with the ticket number and the contact they gave
+    if (req.method === "POST" && pathname === "/api/ticket-status") {
+      if (tooMany(req, "status", 10, 60 * 1000)) return sendJson(res, 429, { error: "Too many tries, please wait a minute." });
+      const body = await readBody(req);
+      const id = String(body.id || "").trim().toLowerCase();
+      const contact = String(body.contact || "").trim().toLowerCase();
+      const ticket = readTickets().find((t) => t.id.toLowerCase() === id && t.contact.trim().toLowerCase() === contact);
+      // The same answer for a wrong number and a wrong contact, so nobody can look up other people's tickets.
+      if (!ticket) return sendJson(res, 404, { error: "No ticket found with those details." });
+      return sendJson(res, 200, { id: ticket.id, status: ticket.status || "open", createdAt: ticket.createdAt, solvedAt: ticket.solvedAt || "" });
     }
 
     // employee sends the ticket form
@@ -468,6 +578,7 @@ const server = http.createServer(async (req, res) => {
         name,
         contact,
         place,
+        priority: conv.priority,
         conversationId: conv.id,
         summary: await summarize(transcript),
         transcript,
@@ -476,14 +587,14 @@ const server = http.createServer(async (req, res) => {
       saveTickets(tickets);
       conv.ticketId = ticket.id;
       conv.name = name;
-      conv.needsHuman = true;
+      flagForPerson(conv);
       conv.updatedAt = Date.now();
       saveConversations();
       return sendJson(res, 201, { id: ticket.id });
     }
 
     // everything below is for the IT team only
-    if (pathname === "/api/tickets" || pathname.startsWith("/api/conversations") || pathname === "/agent.html") {
+    if (pathname.startsWith("/api/tickets") || pathname.startsWith("/api/conversations") || pathname === "/api/stats" || pathname === "/api/knowledge" || pathname === "/agent.html") {
       if (!isAdmin(req)) return askForPassword(res);
     }
 
@@ -491,9 +602,48 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, readTickets().reverse());
     }
 
+    // mark a ticket solved or open again
+    const ticketStatus = pathname.match(/^\/api\/tickets\/(T\d+)\/status$/);
+    if (req.method === "POST" && ticketStatus) {
+      if (!requireJson(req)) return sendJson(res, 415, { error: "Send JSON." });
+      const body = await readBody(req);
+      if (body.status !== "open" && body.status !== "solved") return sendJson(res, 400, { error: "Status must be open or solved." });
+      const tickets = readTickets();
+      const ticket = tickets.find((t) => t.id === ticketStatus[1]);
+      if (!ticket) return sendJson(res, 404, { error: "Ticket not found." });
+      ticket.status = body.status;
+      ticket.solvedAt = body.status === "solved" ? new Date().toISOString() : "";
+      saveTickets(tickets);
+      const conv = conversations.get(ticket.conversationId);
+      if (conv) addMessage(conv, "system", body.status === "solved" ? "Your ticket " + ticket.id + " was marked solved by the IT team." : "Your ticket " + ticket.id + " was opened again.");
+      return sendJson(res, 200, ticket);
+    }
+
+    if (req.method === "GET" && pathname === "/api/stats") {
+      const range = ["today", "week", "all"].includes(url.searchParams.get("range")) ? url.searchParams.get("range") : "all";
+      return sendJson(res, 200, buildStats(range));
+    }
+
+    // the help articles, edited from the IT team page
+    if (pathname === "/api/knowledge") {
+      if (req.method === "GET") return sendJson(res, 200, knowledge.get());
+      if (req.method === "POST") {
+        if (!requireJson(req)) return sendJson(res, 415, { error: "Send JSON." });
+        const body = await readBody(req, 200000);
+        try {
+          return sendJson(res, 200, knowledge.set(body.articles));
+        } catch (err) {
+          return sendJson(res, 400, { error: err.message });
+        }
+      }
+    }
+
+    // chats waiting for a person come first, urgent ones before the rest
+    const weight = (c) => (c.needsHuman && c.mode !== "human" ? 2 : 0) + (c.priority === "urgent" ? 1 : 0);
+
     if (req.method === "GET" && pathname === "/api/conversations") {
       const list = [...conversations.values()]
-        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .sort((a, b) => weight(b) - weight(a) || b.updatedAt - a.updatedAt)
         .map((c) => {
           const last = [...c.messages].reverse().find((m) => m.role !== "system");
           return {
@@ -502,6 +652,8 @@ const server = http.createServer(async (req, res) => {
             ticketId: c.ticketId,
             mode: c.mode,
             needsHuman: c.needsHuman,
+            priority: c.priority,
+            outcome: c.outcome,
             updatedAt: c.updatedAt,
             count: c.messages.length,
             preview: last ? last.content.slice(0, 80) : "",
@@ -510,7 +662,7 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, list);
     }
 
-    const one = pathname.match(/^\/api\/conversations\/([\w-]+)(?:\/(takeover|reply|handback))?$/);
+    const one = pathname.match(/^\/api\/conversations\/([\w-]+)(?:\/(takeover|reply|handback|priority))?$/);
     if (one) {
       const conv = conversations.get(one[1]);
       if (!conv) return sendJson(res, 404, { error: "Chat not found." });
@@ -524,8 +676,15 @@ const server = http.createServer(async (req, res) => {
         if (action === "takeover") {
           if (conv.mode !== "human") {
             conv.mode = "human";
+            conv.tookOver = true;
             addMessage(conv, "system", "An IT team member has joined the chat.");
           }
+          return sendJson(res, 200, publicView(conv, since));
+        }
+        if (action === "priority") {
+          const body = await readBody(req);
+          conv.priority = body.urgent === true ? "urgent" : "normal";
+          saveConversations();
           return sendJson(res, 200, publicView(conv, since));
         }
         if (action === "handback") {

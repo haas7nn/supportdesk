@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NBB IT Team Tickets</title>
+  <title>NBB IT Team</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -14,9 +14,12 @@
       <a class="brand" href="/"><b>NBB</b><span>IT Help<br>project</span></a>
       <nav class="menu">
         <a href="/">Employee portal</a>
-        <a href="/agent.html">IT team tickets</a>
+        <a href="/agent.html">IT team</a>
       </nav>
-      <a class="login" href="/">Back to portal</a>
+      <div class="bar-right">
+        <button class="lang" id="sound" type="button">Sound alerts: off</button>
+        <a class="login" href="/">Back to portal</a>
+      </div>
     </div>
   </header>
 
@@ -24,29 +27,32 @@
     <div class="page-head">
       <div>
         <h1>IT team</h1>
-        <p>Watch chats as they happen, take over from the assistant and reply yourself. Problems the assistant could not solve also become tickets with a short note.</p>
+        <p>Watch chats as they happen, take over from the assistant and reply yourself. See how well the bot is doing, and teach it new fixes.</p>
       </div>
-      <div class="count" id="count" hidden></div>
     </div>
 
     <div class="tabs" role="tablist">
       <button class="tab on" id="tab-live" role="tab">Live chats <span class="pill" id="live-pill" hidden></span></button>
-      <button class="tab" id="tab-tickets" role="tab">Tickets</button>
+      <button class="tab" id="tab-tickets" role="tab">Tickets <span class="pill" id="ticket-pill" hidden></span></button>
+      <button class="tab" id="tab-stats" role="tab">Stats</button>
+      <button class="tab" id="tab-articles" role="tab">Help articles</button>
     </div>
 
     <section id="live" class="live">
       <div class="convs" id="convs">Loading...</div>
-      <div class="thread-box" id="thread-box">
+      <div class="thread-box">
         <div class="empty" id="empty">Pick a chat on the left to read it.</div>
         <div id="open" hidden>
           <div class="thread-head">
-            <div><strong id="th-name"></strong><div class="meta" id="th-meta"></div></div>
+            <div><strong id="th-name"></strong> <span class="state wait" id="th-urgent" hidden>Urgent</span><div class="meta" id="th-meta"></div></div>
             <div class="actions">
+              <button class="ghost" id="urgent-btn">Mark urgent</button>
               <button class="primary" id="take">Take over</button>
               <button class="ghost" id="back">Hand back to bot</button>
             </div>
           </div>
           <div class="thread" id="thread"></div>
+          <div class="chips" id="chips"></div>
           <form class="composer" id="composer">
             <input id="reply" placeholder="Take over first, then write to the employee" maxlength="1000" autocomplete="off" disabled>
             <button class="primary" id="send" type="submit" disabled>Send</button>
@@ -56,114 +62,120 @@
     </section>
 
     <section id="tickets" hidden>
+      <div class="toolbar">
+        <label>Show <select id="ticket-filter"><option value="all">All tickets</option><option value="open" selected>Open</option><option value="solved">Solved</option></select></label>
+      </div>
       <div id="list" class="tickets">Loading...</div>
+    </section>
+
+    <section id="stats" hidden>
+      <div class="toolbar">
+        <label>Period <select id="range"><option value="today">Today</option><option value="week">Last 7 days</option><option value="all" selected>All time</option></select></label>
+      </div>
+      <div class="cards-row" id="cards"></div>
+      <h2 class="sub">Most common problems</h2>
+      <div id="bars" class="bars"></div>
+      <p class="fine">Solved by the bot counts chats where the employee pressed "Yes, fixed" and never needed a person. The numbers reset when the server restarts, which happens on a free host.</p>
+    </section>
+
+    <section id="articles" hidden>
+      <p class="fine top0">These are the fixes the bot knows. Change them, add new ones, then press Save. The bot uses them straight away. Keywords are the words an employee might write, separated by commas, in English or Arabic.</p>
+      <div id="art-list"></div>
+      <div class="toolbar">
+        <button class="ghost" id="art-add">Add an article</button>
+        <button class="primary" id="art-save">Save all</button>
+        <button class="ghost" id="art-download">Download file</button>
+        <span id="art-msg" class="art-msg"></span>
+      </div>
+      <p class="fine">On a free host, saved changes last until the server restarts. To keep them for good, download the file and replace <code>knowledge.json</code> in the project.</p>
     </section>
   </main>
 
   <footer><div class="wrap">A learning project by an NBB service team member. Not official, and no real staff data is used.</div></footer>
 
   <script>
-    const list = document.getElementById("list");
-    const count = document.getElementById("count");
+    const $ = (id) => document.getElementById(id);
+    const BASE_TITLE = "NBB IT Team";
 
-    // Turns the three line note into labelled rows: Problem, Tried, Result.
-    function noteRows(text) {
-      const box = document.createElement("div");
-      box.className = "note-rows";
-      for (const raw of text.split("\n")) {
-        const at = raw.indexOf(":");
-        const row = document.createElement("div");
-        row.className = "note-row";
-        const label = document.createElement("span");
-        const value = document.createElement("span");
-        if (at > 0 && at < 12) {
-          label.textContent = raw.slice(0, at);
-          value.textContent = raw.slice(at + 1).trim();
-        } else {
-          value.textContent = raw;
-        }
-        row.append(label, value);
-        box.append(row);
-      }
-      return box;
+    async function api(path, body) {
+      const res = await fetch(path, body === undefined ? {} : {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Request failed");
+      return data;
     }
 
-    function ticketCard(t) {
-      const card = document.createElement("article");
-      card.className = "ticket-card";
-
-      const top = document.createElement("div");
-      top.className = "ticket-top";
-      const badge = document.createElement("span");
-      badge.className = "badge";
-      badge.textContent = t.id;
-      const who = document.createElement("div");
-      const name = document.createElement("strong");
-      name.textContent = t.name;
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      meta.textContent = t.contact + (t.place ? " · " + t.place : "") + " · " + new Date(t.createdAt).toLocaleString();
-      who.append(name, meta);
-      const status = document.createElement("span");
-      status.className = "status";
-      status.textContent = t.status || "open";
-      top.append(badge, who, status);
-      card.append(top);
-
-      if (t.summary) card.append(noteRows(t.summary));
-
-      const more = document.createElement("details");
-      const label = document.createElement("summary");
-      label.textContent = "Full chat";
-      more.append(label);
-      for (const m of t.transcript) {
-        const line = document.createElement("div");
-        line.className = "line";
-        const b = document.createElement("b");
-        b.textContent = m.role === "user" ? "Employee: " : "Assistant: ";
-        line.append(b, document.createTextNode(m.content));
-        more.append(line);
-      }
-      card.append(more);
-      return card;
+    function el(tag, className, text) {
+      const e = document.createElement(tag);
+      if (className) e.className = className;
+      if (text !== undefined) e.textContent = text;
+      return e;
     }
-
-    fetch("/api/tickets").then((r) => r.json()).then((tickets) => {
-      list.textContent = "";
-      count.hidden = false;
-      count.textContent = tickets.length + (tickets.length === 1 ? " ticket" : " tickets");
-      ticketCount = tickets.length;
-      if (!tickets.length) {
-        list.textContent = "No tickets yet.";
-        return;
-      }
-      for (const t of tickets) list.append(ticketCard(t));
-    }).catch(() => { list.textContent = "Could not load tickets."; });
 
     // ---------- tabs ----------
-    let ticketCount = 0;
-    const live = document.getElementById("live");
-    const ticketsBox = document.getElementById("tickets");
+    const TABS = ["live", "tickets", "stats", "articles"];
+    let currentTab = "live";
     function showTab(name) {
-      const isLive = name === "live";
-      live.hidden = !isLive;
-      ticketsBox.hidden = isLive;
-      document.getElementById("tab-live").classList.toggle("on", isLive);
-      document.getElementById("tab-tickets").classList.toggle("on", !isLive);
+      currentTab = name;
+      for (const t of TABS) {
+        $(t).hidden = t !== name;
+        $("tab-" + t).classList.toggle("on", t === name);
+      }
+      if (name === "tickets") loadTickets();
+      if (name === "stats") loadStats();
+      if (name === "articles") loadArticles();
     }
-    document.getElementById("tab-live").onclick = () => showTab("live");
-    document.getElementById("tab-tickets").onclick = () => showTab("tickets");
+    for (const t of TABS) $("tab-" + t).onclick = () => showTab(t);
+
+    // ---------- sound and title alerts ----------
+    let soundOn = false;
+    let audio = null;
+    $("sound").onclick = () => {
+      soundOn = !soundOn;
+      $("sound").textContent = "Sound alerts: " + (soundOn ? "on" : "off");
+      if (soundOn) {
+        audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+        beep();
+      }
+    };
+    function beep() {
+      if (!soundOn || !audio) return;
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.frequency.value = 880;
+      gain.gain.value = 0.15;
+      osc.connect(gain);
+      gain.connect(audio.destination);
+      osc.start();
+      osc.stop(audio.currentTime + 0.18);
+    }
+    let knownWaiting = null; // ids already waiting, so only new ones make a sound
+    function alertFor(items) {
+      const waiting = items.filter((c) => c.needsHuman && c.mode !== "human");
+      document.title = (waiting.length ? "(" + waiting.length + ") " : "") + BASE_TITLE;
+      const pill = $("live-pill");
+      pill.hidden = waiting.length === 0;
+      pill.textContent = waiting.length;
+      const ids = new Set(waiting.map((c) => c.id));
+      if (knownWaiting && waiting.some((c) => !knownWaiting.has(c.id))) beep();
+      knownWaiting = ids;
+    }
 
     // ---------- live chats ----------
-    const convsBox = document.getElementById("convs");
-    const openBox = document.getElementById("open");
-    const emptyBox = document.getElementById("empty");
-    const thread = document.getElementById("thread");
-    const replyInput = document.getElementById("reply");
-    const sendBtn = document.getElementById("send");
-    const takeBtn = document.getElementById("take");
-    const backBtn = document.getElementById("back");
+    const REPLIES = [
+      "Hello, I am from the IT team and I will help you now.",
+      "Please restart your computer and tell me if it helps.",
+      "Can you send me a screenshot of the error?",
+      "Is the problem still happening?",
+      "I am sending someone to your desk now.",
+      "Please do not share your password with anyone, including me.",
+      "Thank you, I am marking this as solved.",
+    ];
     let selected = null;
+    let selectedUrgent = false;
 
     function ago(ms) {
       const sec = Math.max(0, Math.round((Date.now() - ms) / 1000));
@@ -173,46 +185,25 @@
       return Math.round(sec / 86400) + " d ago";
     }
 
-    async function api(path, body) {
-      const res = await fetch(path, body === undefined ? {} : {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Request failed");
-      return res.json();
-    }
-
     function drawList(items) {
-      const waiting = items.filter((c) => c.needsHuman && c.mode !== "human").length;
-      const pill = document.getElementById("live-pill");
-      pill.hidden = waiting === 0;
-      pill.textContent = waiting;
-      convsBox.textContent = "";
+      alertFor(items);
+      const box = $("convs");
+      box.textContent = "";
       if (!items.length) {
-        convsBox.textContent = "No chats yet. They appear here as soon as an employee writes.";
+        box.textContent = "No chats yet. They appear here as soon as an employee writes.";
         return;
       }
       for (const c of items) {
-        const row = document.createElement("button");
-        row.className = "conv" + (c.id === selected ? " sel" : "");
-        const top = document.createElement("div");
-        top.className = "conv-top";
-        const name = document.createElement("strong");
-        name.textContent = c.name || "Employee " + c.id.slice(0, 4);
-        const state = document.createElement("span");
-        state.className = "state " + (c.mode === "human" ? "human" : c.needsHuman ? "wait" : "bot");
-        state.textContent = c.mode === "human" ? "You" : c.needsHuman ? "Needs a person" : "Bot";
-        top.append(name, state);
-        const prev = document.createElement("div");
-        prev.className = "preview";
-        prev.textContent = c.preview || "No messages";
-        const when = document.createElement("div");
-        when.className = "meta";
-        when.textContent = ago(c.updatedAt) + (c.ticketId ? " · " + c.ticketId : "");
-        row.append(top, prev, when);
+        const row = el("button", "conv" + (c.id === selected ? " sel" : "") + (c.priority === "urgent" ? " urgent" : ""));
+        const top = el("div", "conv-top");
+        top.append(el("strong", "", c.name || "Employee " + c.id.slice(0, 4)));
+        const tags = el("span", "tags");
+        if (c.priority === "urgent") tags.append(el("span", "state wait", "Urgent"));
+        tags.append(el("span", "state " + (c.mode === "human" ? "human" : c.needsHuman ? "wait" : "bot"), c.mode === "human" ? "You" : c.needsHuman ? "Needs a person" : c.outcome === "solved" ? "Solved" : "Bot"));
+        top.append(tags);
+        row.append(top, el("div", "preview", c.preview || "No messages"), el("div", "meta", ago(c.updatedAt) + (c.ticketId ? " · " + c.ticketId : "")));
         row.onclick = () => select(c.id);
-        convsBox.append(row);
+        box.append(row);
       }
     }
 
@@ -221,28 +212,40 @@
     }
 
     function drawThread(c) {
-      document.getElementById("th-name").textContent = c.name || "Employee " + c.id.slice(0, 4);
-      document.getElementById("th-meta").textContent = (c.ticketId ? "Ticket " + c.ticketId + " · " : "") + (c.mode === "human" ? "You are in this chat" : "The bot is answering");
+      selectedUrgent = c.priority === "urgent";
+      $("th-name").textContent = c.name || "Employee " + c.id.slice(0, 4);
+      $("th-urgent").hidden = !selectedUrgent;
+      $("urgent-btn").textContent = selectedUrgent ? "Remove urgent" : "Mark urgent";
+      $("th-meta").textContent = (c.ticketId ? "Ticket " + c.ticketId + " · " : "") + (c.mode === "human" ? "You are in this chat" : "The bot is answering");
+      const thread = $("thread");
       const atBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 40;
       thread.textContent = "";
       for (const m of c.messages) {
-        const b = document.createElement("div");
-        b.className = "tb " + m.role;
-        if (m.role !== "system") {
-          const who = document.createElement("small");
-          who.textContent = m.role === "user" ? "Employee" : m.role === "agent" ? "IT team" : "Bot";
-          b.append(who);
+        const b = el("div", "tb " + m.role);
+        if (m.role !== "system") b.append(el("small", "", m.role === "user" ? "Employee" : m.role === "agent" ? "IT team" : "Bot"));
+        if (m.img) {
+          const link = el("a");
+          link.href = m.img;
+          link.target = "_blank";
+          link.rel = "noopener";
+          const img = el("img", "shot");
+          img.src = m.img;
+          img.alt = "Screenshot from the employee";
+          link.append(img);
+          b.append(link);
+        } else {
+          b.append(document.createTextNode(m.content));
         }
-        b.append(document.createTextNode(m.content));
         thread.append(b);
       }
       if (atBottom) thread.scrollTop = thread.scrollHeight;
       const human = c.mode === "human";
-      replyInput.disabled = !human;
-      sendBtn.disabled = !human;
-      takeBtn.hidden = human;
-      backBtn.hidden = !human;
-      replyInput.placeholder = human ? "Write to the employee" : "Take over first, then write to the employee";
+      $("reply").disabled = !human;
+      $("send").disabled = !human;
+      $("take").hidden = human;
+      $("back").hidden = !human;
+      $("reply").placeholder = human ? "Write to the employee" : "Take over first, then write to the employee";
+      document.querySelectorAll(".chip").forEach((chip) => { chip.disabled = !human; });
     }
 
     async function loadThread() {
@@ -252,31 +255,207 @@
 
     async function select(id) {
       selected = id;
-      emptyBox.hidden = true;
-      openBox.hidden = false;
-      thread.scrollTop = 1e9;
+      $("empty").hidden = true;
+      $("open").hidden = false;
       await loadThread();
-      thread.scrollTop = thread.scrollHeight;
+      $("thread").scrollTop = $("thread").scrollHeight;
       refreshList();
     }
 
-    takeBtn.onclick = async () => {
-      try { await api("/api/conversations/" + selected + "/takeover", {}); await loadThread(); replyInput.focus(); refreshList(); } catch (e) { alert(e.message); }
+    for (const text of REPLIES) {
+      const chip = el("button", "chip", text);
+      chip.type = "button";
+      chip.disabled = true;
+      chip.onclick = () => { $("reply").value = text; $("reply").focus(); };
+      $("chips").append(chip);
+    }
+
+    $("take").onclick = async () => {
+      try { await api("/api/conversations/" + selected + "/takeover", {}); await loadThread(); $("reply").focus(); refreshList(); } catch (e) { alert(e.message); }
     };
-    backBtn.onclick = async () => {
+    $("back").onclick = async () => {
       try { await api("/api/conversations/" + selected + "/handback", {}); await loadThread(); refreshList(); } catch (e) { alert(e.message); }
     };
-    document.getElementById("composer").onsubmit = async (e) => {
+    $("urgent-btn").onclick = async () => {
+      try { await api("/api/conversations/" + selected + "/priority", { urgent: !selectedUrgent }); await loadThread(); refreshList(); } catch (e) { alert(e.message); }
+    };
+    $("composer").onsubmit = async (e) => {
       e.preventDefault();
-      const text = replyInput.value.trim();
+      const text = $("reply").value.trim();
       if (!text || !selected) return;
-      replyInput.value = "";
-      try { await api("/api/conversations/" + selected + "/reply", { text }); await loadThread(); thread.scrollTop = thread.scrollHeight; refreshList(); } catch (err) { replyInput.value = text; alert(err.message); }
+      $("reply").value = "";
+      try {
+        await api("/api/conversations/" + selected + "/reply", { text });
+        await loadThread();
+        $("thread").scrollTop = $("thread").scrollHeight;
+        refreshList();
+      } catch (err) { $("reply").value = text; alert(err.message); }
     };
 
+    // ---------- tickets ----------
+    function noteRows(text) {
+      const box = el("div", "note-rows");
+      for (const raw of text.split("\n")) {
+        const at = raw.indexOf(":");
+        const row = el("div", "note-row");
+        if (at > 0 && at < 12) row.append(el("span", "", raw.slice(0, at)), el("span", "", raw.slice(at + 1).trim()));
+        else row.append(el("span"), el("span", "", raw));
+        box.append(row);
+      }
+      return box;
+    }
+
+    function ticketCard(t) {
+      const card = el("article", "ticket-card" + (t.status === "solved" ? " done" : ""));
+      const top = el("div", "ticket-top");
+      const who = el("div");
+      who.append(el("strong", "", t.name));
+      who.append(el("div", "meta", t.contact + (t.place ? " · " + t.place : "") + " · " + new Date(t.createdAt).toLocaleString()));
+      top.append(el("span", "badge", t.id), who);
+      if (t.priority === "urgent") top.append(el("span", "state wait", "Urgent"));
+      top.append(el("span", "status " + (t.status === "solved" ? "ok" : ""), t.status || "open"));
+      card.append(top);
+      if (t.summary) card.append(noteRows(t.summary));
+
+      const row = el("div", "ticket-actions");
+      const flip = el("button", t.status === "solved" ? "ghost" : "primary", t.status === "solved" ? "Open again" : "Mark solved");
+      flip.onclick = async () => {
+        flip.disabled = true;
+        try { await api("/api/tickets/" + t.id + "/status", { status: t.status === "solved" ? "open" : "solved" }); loadTickets(); } catch (e) { alert(e.message); flip.disabled = false; }
+      };
+      row.append(flip);
+      if (t.conversationId) {
+        const chatBtn = el("button", "ghost", "Open the chat");
+        chatBtn.onclick = () => { showTab("live"); select(t.conversationId); };
+        row.append(chatBtn);
+      }
+      card.append(row);
+
+      const more = el("details");
+      more.append(el("summary", "", "Full chat"));
+      for (const m of t.transcript) {
+        const line = el("div", "line");
+        line.append(el("b", "", m.role === "user" ? "Employee: " : m.role === "agent" ? "IT team: " : "Assistant: "), document.createTextNode(m.content));
+        more.append(line);
+      }
+      card.append(more);
+      return card;
+    }
+
+    async function loadTickets() {
+      try {
+        const all = await api("/api/tickets");
+        const open = all.filter((t) => t.status !== "solved").length;
+        $("ticket-pill").hidden = open === 0;
+        $("ticket-pill").textContent = open;
+        const filter = $("ticket-filter").value;
+        const shown = all.filter((t) => filter === "all" || (filter === "solved") === (t.status === "solved"));
+        const box = $("list");
+        box.textContent = "";
+        if (!shown.length) box.textContent = "No tickets here.";
+        for (const t of shown) box.append(ticketCard(t));
+      } catch { $("list").textContent = "Could not load tickets."; }
+    }
+    $("ticket-filter").onchange = loadTickets;
+
+    // ---------- stats ----------
+    function statCard(label, value, hint) {
+      const c = el("div", "stat");
+      c.append(el("div", "stat-value", String(value)), el("div", "stat-label", label));
+      if (hint) c.append(el("div", "stat-hint", hint));
+      return c;
+    }
+    async function loadStats() {
+      try {
+        const s = await api("/api/stats?range=" + $("range").value);
+        const cards = $("cards");
+        cards.textContent = "";
+        cards.append(
+          statCard("Chats", s.chats),
+          statCard("Solved by the bot", s.solvedByBot),
+          statCard("Needed a person", s.neededPerson),
+          statCard("Bot solve rate", s.solveRate === null ? "n/a" : s.solveRate + "%", "solved out of solved plus needed a person"),
+          statCard("Open tickets", s.tickets.open, s.tickets.solved + " solved"),
+          statCard("Urgent chats", s.urgent)
+        );
+        const bars = $("bars");
+        bars.textContent = "";
+        if (!s.topTopics.length) bars.textContent = "No chats in this period yet.";
+        const top = Math.max(1, ...s.topTopics.map((t) => t.count));
+        for (const t of s.topTopics) {
+          const row = el("div", "bar-row");
+          row.append(el("span", "bar-name", t.topic));
+          const track = el("span", "bar-track");
+          const fill = el("span", "bar-fill");
+          fill.style.width = Math.round((t.count / top) * 100) + "%";
+          track.append(fill);
+          row.append(track, el("span", "bar-count", String(t.count)));
+          bars.append(row);
+        }
+      } catch { $("cards").textContent = "Could not load the numbers."; }
+    }
+    $("range").onchange = loadStats;
+
+    // ---------- help articles ----------
+    let articles = [];
+    function drawArticles() {
+      const box = $("art-list");
+      box.textContent = "";
+      articles.forEach((a, i) => {
+        const card = el("div", "art");
+        const topic = el("input");
+        topic.value = a.topic;
+        topic.placeholder = "Topic, for example Teams not working";
+        topic.oninput = () => { a.topic = topic.value; };
+        const kw = el("input");
+        kw.value = (a.keywords || []).join(", ");
+        kw.placeholder = "Keywords, separated by commas";
+        kw.oninput = () => { a.keywords = kw.value.split(",").map((k) => k.trim()).filter(Boolean); };
+        const answer = el("textarea");
+        answer.value = a.answer;
+        answer.rows = 3;
+        answer.placeholder = "The fix, in simple steps";
+        answer.oninput = () => { a.answer = answer.value; };
+        const ar = el("textarea");
+        ar.value = a.answer_ar || "";
+        ar.rows = 3;
+        ar.dir = "rtl";
+        ar.placeholder = "الحل بالعربية (اختياري)";
+        ar.oninput = () => { a.answer_ar = ar.value; };
+        const del = el("button", "ghost", "Delete");
+        del.type = "button";
+        del.onclick = () => { articles.splice(i, 1); drawArticles(); };
+        card.append(topic, kw, answer, ar, del);
+        box.append(card);
+      });
+    }
+    async function loadArticles() {
+      try { articles = await api("/api/knowledge"); drawArticles(); } catch (e) { $("art-msg").textContent = e.message; }
+    }
+    $("art-add").onclick = () => { articles.push({ topic: "", keywords: [], answer: "" }); drawArticles(); };
+    $("art-save").onclick = async () => {
+      $("art-msg").textContent = "Saving...";
+      try {
+        articles = await api("/api/knowledge", { articles });
+        drawArticles();
+        $("art-msg").textContent = "Saved. The bot uses these now.";
+      } catch (e) { $("art-msg").textContent = e.message; }
+    };
+    $("art-download").onclick = () => {
+      const blob = new Blob([JSON.stringify(articles, null, 2)], { type: "application/json" });
+      const link = el("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "knowledge.json";
+      link.click();
+      URL.revokeObjectURL(link.href);
+    };
+
+    // ---------- start ----------
     refreshList();
+    loadTickets();
     setInterval(refreshList, 3000);
     setInterval(loadThread, 2000);
+    setInterval(() => { if (currentTab === "stats") loadStats(); if (currentTab === "tickets") loadTickets(); }, 10000);
   </script>
 </body>
 </html>

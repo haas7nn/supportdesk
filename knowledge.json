@@ -9,9 +9,17 @@
       "inbox",
       "sync",
       "updating",
-      "receiving"
+      "receiving",
+      "اوتلوك",
+      "أوتلوك",
+      "ايميل",
+      "إيميل",
+      "بريد",
+      "الايميل",
+      "الإيميل"
     ],
-    "answer": "Check the bottom bar of Outlook. If it says Working Offline or Disconnected, go to the Send/Receive tab and click Work Offline to turn it off. If it still does not update, close Outlook completely, wait 10 seconds and open it again. Also check you are connected to the office network or VPN."
+    "answer": "Check the bottom bar of Outlook. If it says Working Offline or Disconnected, go to the Send/Receive tab and click Work Offline to turn it off. If it still does not update, close Outlook completely, wait 10 seconds and open it again. Also check you are connected to the office network or VPN.",
+    "answer_ar": "انظر إلى الشريط السفلي في أوتلوك. إذا ظهرت عبارة العمل دون اتصال أو غير متصل، افتح تبويب إرسال/استقبال واضغط على العمل دون اتصال لإيقافه. إذا لم يتم تحديث البريد، أغلق أوتلوك تماماً وانتظر ١٠ ثوانٍ ثم افتحه من جديد. تأكد أيضاً أنك متصل بشبكة المكتب أو الشبكة الخاصة VPN."
   },
   {
     "topic": "Keyboard not working",
@@ -19,9 +27,13 @@
       "keyboard",
       "keys",
       "typing",
-      "type"
+      "type",
+      "كيبورد",
+      "لوحة المفاتيح",
+      "لوحة مفاتيح"
     ],
-    "answer": "Unplug the keyboard and plug it into a different USB port. For a wireless keyboard, replace the batteries and check the small USB receiver is plugged in. If only some keys fail, check Num Lock and Caps Lock. If a laptop keyboard fails, restart once. If none of this works, I will pass this to the IT team to swap it."
+    "answer": "Unplug the keyboard and plug it into a different USB port. For a wireless keyboard, replace the batteries and check the small USB receiver is plugged in. If only some keys fail, check Num Lock and Caps Lock. If a laptop keyboard fails, restart once. If none of this works, I will pass this to the IT team to swap it.",
+    "answer_ar": "افصل لوحة المفاتيح ثم وصلها بمنفذ USB آخر. إذا كانت لاسلكية فغيّر البطاريات وتأكد أن جهاز الاستقبال الصغير موصول. إذا كانت بعض الأزرار فقط لا تعمل فتحقق من Num Lock و Caps Lock. إذا كان الجهاز محمولاً فأعد تشغيله مرة واحدة. وإذا لم ينفع شيء فسأحوّل الأمر إلى فريق تقنية المعلومات لاستبدالها."
   },
   {
     "topic": "Mouse not working",
@@ -29,9 +41,13 @@
       "mouse",
       "cursor",
       "pointer",
-      "click"
+      "click",
+      "ماوس",
+      "فأرة",
+      "الماوس"
     ],
-    "answer": "Unplug and replug the mouse, or try another USB port. For a wireless mouse, change the batteries and check the receiver. Try the mouse on a different surface, since glossy desks can confuse it."
+    "answer": "Unplug and replug the mouse, or try another USB port. For a wireless mouse, change the batteries and check the receiver. Try the mouse on a different surface, since glossy desks can confuse it.",
+    "answer_ar": "افصل الفأرة ثم أعد توصيلها، أو جرّب منفذ USB آخر. إذا كانت لاسلكية فغيّر البطاريات وتأكد من جهاز الاستقبال. جرّب الفأرة على سطح مختلف لأن الأسطح اللامعة قد تربكها."
   },
   {
     "topic": "Computer is slow or frozen",
@@ -42,9 +58,16 @@
       "hang",
       "stuck",
       "lag",
-      "not responding"
+      "not responding",
+      "بطيء",
+      "بطيئ",
+      "هنق",
+      "معلق",
+      "يعلق",
+      "تجمد"
     ],
-    "answer": "Save your work, then restart the computer. A restart fixes most slow computers, and many people go weeks without one. Close programs you are not using. If a single program is frozen, press Ctrl, Shift and Esc, select it and choose End task."
+    "answer": "Save your work, then restart the computer. A restart fixes most slow computers, and many people go weeks without one. Close programs you are not using. If a single program is frozen, press Ctrl, Shift and Esc, select it and choose End task.",
+    "answer_ar": "احفظ عملك ثم أعد تشغيل الجهاز، فإعادة التشغيل تحل معظم حالات البطء. أغلق البرامج التي لا تستخدمها. إذا كان برنامج واحد فقط متجمداً فاضغط Ctrl و Shift و Esc، ثم اختره واضغط إنهاء المهمة."
   },
   {
     "topic": "Cannot print",
@@ -53,9 +76,14 @@
       "printer",
       "printing",
       "paper",
-      "queue"
+      "queue",
+      "طابعة",
+      "الطابعة",
+      "طباعة",
+      "اطبع"
     ],
-    "answer": "Check the printer screen for a paper jam, empty paper or low toner message. On your computer, open the print queue and cancel any stuck jobs, then try again. Check you picked the right printer in the print window."
+    "answer": "Check the printer screen for a paper jam, empty paper or low toner message. On your computer, open the print queue and cancel any stuck jobs, then try again. Check you picked the right printer in the print window.",
+    "answer_ar": "تحقق من شاشة الطابعة بحثاً عن انحشار ورق أو نفاد الورق أو قلة الحبر. على جهازك افتح قائمة الطباعة وألغِ أي مهام عالقة ثم حاول من جديد. وتأكد أنك اخترت الطابعة الصحيحة في نافذة الطباعة."
   },
   {
     "topic": "No internet or Wi-Fi",
@@ -66,9 +94,15 @@
       "network",
       "connection",
       "vpn",
-      "connect"
+      "connect",
+      "انترنت",
+      "إنترنت",
+      "الانترنت",
+      "واي فاي",
+      "شبكة"
     ],
-    "answer": "Turn Wi-Fi off and on again, or unplug and replug the network cable. Restart the computer once. If other people near you are also offline, tell me, because it is probably a wider issue for the IT team."
+    "answer": "Turn Wi-Fi off and on again, or unplug and replug the network cable. Restart the computer once. If other people near you are also offline, tell me, because it is probably a wider issue for the IT team.",
+    "answer_ar": "أوقف الواي فاي ثم شغّله من جديد، أو افصل كابل الشبكة وأعد توصيله. أعد تشغيل الجهاز مرة واحدة. إذا كان زملاؤك بجانبك بلا إنترنت أيضاً فأخبرني، لأن المشكلة غالباً أوسع وتخص فريق تقنية المعلومات."
   },
   {
     "topic": "Forgot or locked password",
@@ -78,9 +112,18 @@
       "forgot",
       "login",
       "sign in",
-      "account"
+      "account",
+      "كلمة المرور",
+      "الباسورد",
+      "باسورد",
+      "كلمة السر",
+      "مقفل",
+      "log in",
+      "logged out",
+      "cannot login"
     ],
-    "answer": "Wait 30 minutes after too many wrong attempts and the account unlocks by itself. To reset your password now, use the self service reset page on the intranet. Never type your password into this chat."
+    "answer": "Wait 30 minutes after too many wrong attempts and the account unlocks by itself. To reset your password now, use the self service reset page on the intranet. Never type your password into this chat.",
+    "answer_ar": "انتظر ٣٠ دقيقة بعد المحاولات الخاطئة الكثيرة وسيُفتح الحساب تلقائياً. ولتغيير كلمة المرور الآن استخدم صفحة إعادة التعيين الذاتية في الشبكة الداخلية. لا تكتب كلمة المرور في هذه المحادثة أبداً."
   },
   {
     "topic": "Microsoft Teams not working",
@@ -91,9 +134,14 @@
       "video",
       "camera",
       "microphone",
-      "mic"
+      "mic",
+      "تيمز",
+      "اجتماع",
+      "كاميرا",
+      "مايك"
     ],
-    "answer": "Close Teams completely by right clicking its icon near the clock and choosing Quit, then open it again. If it still fails, sign out of Teams and sign back in. For no sound or camera in a call, open Settings, then Devices, and pick the right headset or camera. Restart the computer if nothing else works."
+    "answer": "Close Teams completely by right clicking its icon near the clock and choosing Quit, then open it again. If it still fails, sign out of Teams and sign back in. For no sound or camera in a call, open Settings, then Devices, and pick the right headset or camera. Restart the computer if nothing else works.",
+    "answer_ar": "أغلق تيمز تماماً بالضغط بزر الفأرة الأيمن على أيقونته قرب الساعة واختيار إنهاء، ثم افتحه من جديد. إذا استمرت المشكلة فسجّل الخروج ثم الدخول. وإذا لم يعمل الصوت أو الكاميرا في الاتصال فافتح الإعدادات ثم الأجهزة واختر سماعة أو كاميرا صحيحة. أعد تشغيل الجهاز إذا لم ينفع شيء."
   },
   {
     "topic": "Screen or monitor shows nothing",
@@ -103,9 +151,14 @@
       "display",
       "black",
       "blank",
-      "projector"
+      "projector",
+      "شاشة",
+      "الشاشة",
+      "سوداء",
+      "عارض"
     ],
-    "answer": "Check the screen is switched on and the cable is pushed in firmly at both ends. Press the Windows key and P together and choose Duplicate or Extend. If you can, try another cable or port. A cracked screen needs IT to replace it."
+    "answer": "Check the screen is switched on and the cable is pushed in firmly at both ends. Press the Windows key and P together and choose Duplicate or Extend. If you can, try another cable or port. A cracked screen needs IT to replace it.",
+    "answer_ar": "تأكد أن الشاشة تعمل وأن الكابل مثبت جيداً من الطرفين. اضغط مفتاح ويندوز مع P واختر تكرار أو توسيع. جرّب كابلاً أو منفذاً آخر إن أمكن. والشاشة المكسورة يجب أن يستبدلها فريق تقنية المعلومات."
   },
   {
     "topic": "No sound or headset not working",
@@ -115,9 +168,13 @@
       "headset",
       "headphones",
       "speaker",
-      "volume"
+      "volume",
+      "صوت",
+      "سماعة",
+      "سماعات"
     ],
-    "answer": "Check the volume is not muted. Right click the speaker icon near the clock and pick the right output device. Unplug the headset and plug it into another USB port."
+    "answer": "Check the volume is not muted. Right click the speaker icon near the clock and pick the right output device. Unplug the headset and plug it into another USB port.",
+    "answer_ar": "تأكد أن الصوت غير مكتوم. اضغط بزر الفأرة الأيمن على أيقونة السماعة قرب الساعة واختر جهاز الإخراج الصحيح. افصل السماعة ثم وصلها بمنفذ USB آخر."
   },
   {
     "topic": "Word or Excel crashing",
@@ -128,8 +185,14 @@
       "office",
       "crash",
       "crashing",
-      "closes"
+      "closes",
+      "وورد",
+      "اكسل",
+      "إكسل",
+      "اوفيس",
+      "أوفيس"
     ],
-    "answer": "Save your work and close all Office programs, then open the one you need again. Hold the Ctrl key while opening it to start in safe mode. If it keeps crashing, restart the computer."
+    "answer": "Save your work and close all Office programs, then open the one you need again. Hold the Ctrl key while opening it to start in safe mode. If it keeps crashing, restart the computer.",
+    "answer_ar": "احفظ عملك وأغلق جميع برامج أوفيس، ثم افتح البرنامج الذي تريده من جديد. اضغط على مفتاح Ctrl أثناء فتحه ليعمل في الوضع الآمن. إذا استمر الانهيار فأعد تشغيل الجهاز."
   }
 ]
