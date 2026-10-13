@@ -50,34 +50,54 @@ For employees:
 * Attach a screenshot. The page shrinks it first, and the server only accepts real JPEG files.
 * Check a ticket with its number and the contact they gave.
 
-For the IT team (password protected):
+For the IT team (each person signs in with their own username and password):
 * Live chats with a Needs a person label, an Urgent label, a sound alert and a count in the tab title.
 * Take over, reply with saved replies, hand back to the bot, mark urgent.
 * Tickets with the Problem, Tried and Result note, and Mark solved or Open again.
 * Stats: chats, solved by the bot, needed a person, solve rate, and the most common problems.
-* Help articles: edit what the bot knows, in English and Arabic, with no code.
+* Help articles, on their own page: a searchable list and an editor, in English and Arabic, with a box to try the bot. No code needed.
+* Team: the owner adds and removes members and resets passwords, and everyone can change their own password.
+* Every reply carries the name of the person who wrote it, and the chat list shows who has each chat.
+* Email alerts when a chat needs a person, when a chat is urgent, and when a ticket arrives.
+
+## Keeping data for good (a database)
+
+By default chats and tickets are saved in plain files. A free host wipes those on every restart. To keep everything, set `DATABASE_URL` to a Postgres address (a free one from https://neon.tech works). Then chats, tickets, screenshots, team members and edited help articles are all saved in the database, and the server needs nothing else. Run `npm install` once so the database package is there.
+
+## Signing in
+
+The owner account is the username `admin`, and its password is the `ADMIN_PASSWORD` setting. Forgot it? Change the setting and restart, and the account follows it. The owner adds the other team members on the Team tab. Passwords are stored only as salted hashes. Set `SESSION_SECRET` to a long random text so sign ins last across restarts.
+
+## Email alerts
+
+Set `RESEND_API_KEY` (from https://resend.com) and `ALERT_EMAIL_TO` (one or more addresses, separated by commas), and optionally `PUBLIC_URL` so the email links to the IT page. With Resend's test sender, mail can only go to the address you signed up with, until you verify your own domain. There is a limit of one email per chat every 30 minutes, and 20 an hour overall.
 
 ## Files
 
 | File | What it does |
 | --- | --- |
-| `server.js` | The whole backend, no packages needed |
+| `server.js` | The backend: chat, tickets, sign in, team |
+| `store.js` | Saves everything, to files or to a database |
+| `auth.js` | Password hashing and sign in cookies |
+| `alerts.js` | Email alerts |
 | `knowledge.json`, `knowledge.js` | The help articles, and the code that loads, checks and matches them |
 | `public/index.html`, `style.css` | The portal page |
 | `public/chat.js`, `public/i18n.js` | The chat widget, and the English and Arabic texts |
-| `public/agent.html` | The IT team page, live chats and tickets |
+| `public/agent.html` | The IT team page: live chats, tickets, stats, team |
+| `public/articles.html` | The help articles editor |
+| `public/login.html` | The IT team sign in page |
 
 ## Safety choices worth mentioning
 
 * The assistant is told never to accept passwords, and the chat shows a warning.
 * Typed text is shown with `textContent`, so it can never run as code.
 * Message length and count are limited, and the server falls back to keyword answers if the AI is down.
-* The IT team routes need the admin password, and the actions that change things only accept JSON, so another website cannot trigger them.
-* Demo limits: no login on the agent page, and tickets and chats sit in plain files, which a free host wipes when it restarts. A real system needs both fixed.
+* The IT team pages need a sign in. The cookie is signed, HttpOnly and SameSite strict, and actions that change things only accept JSON, so another website cannot trigger them.
+* A removed member or a changed password ends that persons sessions at once.
+* Demo limits: the sign in has no lockout after many wrong tries, only a rate limit, and there is no two step sign in. A real system would add both.
 
 ## Ideas for next steps
 
-* A login for each IT team member, instead of one shared password.
-* A real database, so chats and tickets survive restarts.
-* Email alerts for urgent chats.
+* Two step sign in for the IT team.
+* Assign a ticket to one person.
 * Add more problems to `knowledge.json` from the tickets the team sees most often.

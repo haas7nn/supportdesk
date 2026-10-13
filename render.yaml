@@ -3,10 +3,25 @@ services:
     name: supportdesk
     runtime: node
     plan: free
-    buildCommand: echo no build needed
+    buildCommand: npm install
     startCommand: node server.js
     envVars:
+      # AI, set one of these
       - key: GROQ_API_KEY
         sync: false
+      # The owner account: username admin, with this password
       - key: ADMIN_PASSWORD
+        sync: false
+      # A long random text. Keeps IT team sign ins valid across restarts
+      - key: SESSION_SECRET
+        generateValue: true
+      # Optional: a Postgres address, so chats and tickets are kept for good
+      - key: DATABASE_URL
+        sync: false
+      # Optional: email alerts (https://resend.com)
+      - key: RESEND_API_KEY
+        sync: false
+      - key: ALERT_EMAIL_TO
+        sync: false
+      - key: PUBLIC_URL
         sync: false
