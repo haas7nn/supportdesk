@@ -3,52 +3,111 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>IT team view</title>
+  <title>NBB IT Team Tickets</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="disclaimer">Student project only. Not an official NBB system.</div>
-  <main class="agent">
-    <h1>Tickets for the IT team</h1>
-    <p>Only the problems the assistant could not solve appear here, with the full chat so nobody has to ask again.</p>
-    <div id="list">Loading...</div>
-    <p><a href="/">Back to the portal</a></p>
+  <div class="disclaimer">Student project only. This is not an official NBB system and is not connected to NBB.</div>
+
+  <header class="top">
+    <div class="wrap bar">
+      <a class="brand" href="/"><b>NBB</b><span>IT Help<br>project</span></a>
+      <nav class="menu">
+        <a href="/">Employee portal</a>
+        <a href="/agent.html">IT team tickets</a>
+      </nav>
+      <a class="login" href="/">Back to portal</a>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="page-head">
+      <div>
+        <h1>IT team tickets</h1>
+        <p>Only the problems the assistant could not solve appear here. Each ticket has a short note and the full chat, so nobody has to ask again.</p>
+      </div>
+      <div class="count" id="count" hidden></div>
+    </div>
+    <div id="list" class="tickets">Loading...</div>
   </main>
+
+  <footer><div class="wrap">A learning project by an NBB service team member. Not official, and no real staff data is used.</div></footer>
+
   <script>
     const list = document.getElementById("list");
+    const count = document.getElementById("count");
+
+    // Turns the three line note into labelled rows: Problem, Tried, Result.
+    function noteRows(text) {
+      const box = document.createElement("div");
+      box.className = "note-rows";
+      for (const raw of text.split("\n")) {
+        const at = raw.indexOf(":");
+        const row = document.createElement("div");
+        row.className = "note-row";
+        const label = document.createElement("span");
+        const value = document.createElement("span");
+        if (at > 0 && at < 12) {
+          label.textContent = raw.slice(0, at);
+          value.textContent = raw.slice(at + 1).trim();
+        } else {
+          value.textContent = raw;
+        }
+        row.append(label, value);
+        box.append(row);
+      }
+      return box;
+    }
+
+    function ticketCard(t) {
+      const card = document.createElement("article");
+      card.className = "ticket-card";
+
+      const top = document.createElement("div");
+      top.className = "ticket-top";
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = t.id;
+      const who = document.createElement("div");
+      const name = document.createElement("strong");
+      name.textContent = t.name;
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = t.contact + (t.place ? " · " + t.place : "") + " · " + new Date(t.createdAt).toLocaleString();
+      who.append(name, meta);
+      const status = document.createElement("span");
+      status.className = "status";
+      status.textContent = t.status || "open";
+      top.append(badge, who, status);
+      card.append(top);
+
+      if (t.summary) card.append(noteRows(t.summary));
+
+      const more = document.createElement("details");
+      const label = document.createElement("summary");
+      label.textContent = "Full chat";
+      more.append(label);
+      for (const m of t.transcript) {
+        const line = document.createElement("div");
+        line.className = "line";
+        const b = document.createElement("b");
+        b.textContent = m.role === "user" ? "Employee: " : "Assistant: ";
+        line.append(b, document.createTextNode(m.content));
+        more.append(line);
+      }
+      card.append(more);
+      return card;
+    }
+
     fetch("/api/tickets").then((r) => r.json()).then((tickets) => {
       list.textContent = "";
-      if (!tickets.length) { list.textContent = "No tickets yet."; return; }
-      for (const t of tickets) {
-        const card = document.createElement("div");
-        card.className = "ticket-card";
-        const h = document.createElement("h3");
-        h.textContent = t.id + " · " + t.name;
-        const meta = document.createElement("div");
-        meta.className = "meta";
-        meta.textContent = t.contact + (t.place ? " · " + t.place : "") + " · " + new Date(t.createdAt).toLocaleString();
-        card.append(h, meta);
-        if (t.summary) {
-          const sum = document.createElement("div");
-          sum.className = "summary";
-          sum.textContent = t.summary;
-          card.append(sum);
-        }
-        const more = document.createElement("details");
-        const label = document.createElement("summary");
-        label.textContent = "Full chat";
-        more.append(label);
-        card.append(more);
-        for (const m of t.transcript) {
-          const p = document.createElement("div");
-          p.className = "line";
-          const who = document.createElement("b");
-          who.textContent = m.role === "user" ? "Employee: " : "Assistant: ";
-          p.append(who, document.createTextNode(m.content));
-          more.append(p);
-        }
-        list.append(card);
+      count.hidden = false;
+      count.textContent = tickets.length + (tickets.length === 1 ? " ticket" : " tickets");
+      if (!tickets.length) {
+        list.textContent = "No tickets yet.";
+        return;
       }
+      for (const t of tickets) list.append(ticketCard(t));
     }).catch(() => { list.textContent = "Could not load tickets."; });
   </script>
 </body>
