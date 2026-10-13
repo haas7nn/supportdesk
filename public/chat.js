@@ -38,6 +38,16 @@ toggle.addEventListener("click", openChat);
 document.getElementById("hero-chat").addEventListener("click", openChat);
 document.getElementById("chat-close").addEventListener("click", closeChat);
 
+// Links on the page that start the chat with a question already asked.
+document.querySelectorAll("[data-ask]").forEach((link) => {
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    openChat();
+    input.value = link.dataset.ask;
+    form.requestSubmit();
+  });
+});
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = input.value.trim();

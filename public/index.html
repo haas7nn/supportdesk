@@ -8,47 +8,105 @@
 </head>
 <body>
   <div class="disclaimer">Student project only. This is not an official NBB system and is not connected to NBB.</div>
+
   <header class="top">
     <div class="wrap bar">
-      <span class="brand">NBB <small>IT Help project</small></span>
-      <nav>
-        <a href="#help">Common problems</a>
-        <a href="#contact">Contact IT</a>
-        <a href="/agent.html">IT team view</a>
+      <a class="brand" href="/"><b>NBB</b><span>IT Help<br>project</span></a>
+      <nav class="menu">
+        <a href="#email">Email</a>
+        <a href="#devices">Devices</a>
+        <a href="#printing">Printing</a>
+        <a href="#network">Network</a>
+        <a href="#accounts">Accounts</a>
       </nav>
+      <a class="login" href="/agent.html">IT team login</a>
     </div>
   </header>
 
   <main>
-    <section class="hero">
-      <div class="wrap">
-        <h1>Something not working?</h1>
-        <p>Describe the problem to our assistant first. Many issues have a quick fix you can try yourself, and if it does not help, a ticket goes straight to the IT team with your chat attached.</p>
-        <button class="primary" id="hero-chat">Describe your problem</button>
-        <p class="note">Project idea: let AI solve the basic problems first, so only unsolved cases become tickets.</p>
+    <section class="rail" aria-label="Highlights">
+      <article class="tile first red">
+        <div>
+          <div class="big">Something not working?</div>
+          <div class="small">Tell the assistant first. Most problems have a quick fix.</div>
+          <button class="primary" id="hero-chat">Start a chat</button>
+        </div>
+      </article>
+      <article class="tile coral">
+        <svg class="art" viewBox="0 0 64 64"><rect x="8" y="14" width="48" height="32" rx="3"/><path d="M24 54h16M32 46v8"/></svg>
+        <div class="panel"><h2>Computer slow or frozen? Try this first</h2><a href="#" data-ask="My computer is slow">See the steps &rarr;</a></div>
+      </article>
+      <article class="tile dark">
+        <svg class="art" viewBox="0 0 64 64"><rect x="8" y="16" width="48" height="32" rx="3"/><path d="M8 20l24 18 24-18"/></svg>
+        <div class="panel"><h2>Outlook not updating? It is usually offline mode</h2><a href="#" data-ask="My Outlook is not updating">Fix Outlook &rarr;</a></div>
+      </article>
+      <article class="tile sand">
+        <svg class="art" viewBox="0 0 64 64"><path d="M16 26V10h32v16"/><rect x="8" y="26" width="48" height="20" rx="3"/><rect x="16" y="38" width="32" height="16"/></svg>
+        <div class="panel"><h2>Printer stuck? Clear the queue in a minute</h2><a href="#" data-ask="I cannot print">Fix printing &rarr;</a></div>
+      </article>
+    </section>
+
+    <section class="cols" aria-label="Common problems">
+      <div class="col" id="email">
+        <div class="head"><div class="dot" style="background:var(--navy)"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></div></div>
+        <h3 style="color:var(--navy)">Email</h3>
+        <ul>
+          <li><a href="#" data-ask="My Outlook is not updating">Outlook not updating</a></li>
+          <li><a href="#" data-ask="I am not receiving email">Not receiving email</a></li>
+          <li><a href="#" data-ask="I cannot send email">Cannot send email</a></li>
+        </ul>
+      </div>
+      <div class="col" id="devices">
+        <div class="head"><div class="dot" style="background:var(--olive)"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="11" rx="2"/><path d="M6 11h.01M10 11h.01M14 11h.01M18 11h.01M7 15h10"/></svg></div></div>
+        <h3 style="color:var(--olive)">Devices</h3>
+        <ul>
+          <li><a href="#" data-ask="My keyboard is not working">Keyboard not working</a></li>
+          <li><a href="#" data-ask="My mouse is not working">Mouse not working</a></li>
+          <li><a href="#" data-ask="My computer is slow">Computer is slow</a></li>
+        </ul>
+      </div>
+      <div class="col" id="printing">
+        <div class="head"><div class="dot" style="background:var(--teal)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><rect x="7" y="14" width="10" height="7"/></svg></div></div>
+        <h3 style="color:var(--teal)">Printing</h3>
+        <ul>
+          <li><a href="#" data-ask="I cannot print">Cannot print</a></li>
+          <li><a href="#" data-ask="My printer has a paper jam">Paper jam or low toner</a></li>
+        </ul>
+      </div>
+      <div class="col" id="network">
+        <div class="head"><div class="dot" style="background:var(--amber)"><svg viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 13a10 10 0 0114 0M8.5 16.5a5 5 0 017 0M12 20h.01"/></svg></div></div>
+        <h3 style="color:var(--amber)">Network</h3>
+        <ul>
+          <li><a href="#" data-ask="I have no internet or WiFi">No internet or WiFi</a></li>
+          <li><a href="#" data-ask="I cannot connect to the VPN">Cannot connect to VPN</a></li>
+        </ul>
+      </div>
+      <div class="col" id="accounts">
+        <div class="head"><div class="dot" style="background:var(--navy)"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></div></div>
+        <h3 style="color:var(--navy)">Accounts</h3>
+        <ul>
+          <li><a href="#" data-ask="I forgot my password">Forgot my password</a></li>
+          <li><a href="#" data-ask="My account is locked">Account locked</a></li>
+        </ul>
+      </div>
+      <div class="col" id="contact">
+        <div class="head"><div class="dot" style="background:var(--brand)"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 01-11.5 7.2L4 20l1-4.5A8 8 0 1121 12z"/></svg></div></div>
+        <h3 style="color:var(--brand)">Contact IT</h3>
+        <ul>
+          <li><a href="#" data-ask="Hello">Talk to the assistant</a></li>
+          <li><a href="#" data-ask="I need to speak to a person">Ask for a person</a></li>
+          <li><a href="/agent.html">IT team login</a></li>
+        </ul>
       </div>
     </section>
 
-    <section class="wrap" id="help">
-      <h2>Common problems</h2>
-      <div class="cards">
-        <article><h3>Outlook</h3><p>Not updating, offline, or not receiving mail.</p></article>
-        <article><h3>Keyboard and mouse</h3><p>Keys or clicks not responding.</p></article>
-        <article><h3>Printing</h3><p>Stuck jobs, jams and wrong printer.</p></article>
-        <article><h3>Network and VPN</h3><p>No internet or cannot connect.</p></article>
-      </div>
-    </section>
-
-    <section class="wrap" id="contact">
-      <h2>Contact IT</h2>
-      <p>Need a person right away? Open the assistant and say so, and it will create a ticket for you.</p>
-    </section>
+    <p class="note">Project idea: let AI solve the basic problems first, so only unsolved cases become tickets for the IT team.</p>
   </main>
 
   <footer><div class="wrap">A learning project by an NBB service team member. Not official, and no real staff data is used.</div></footer>
 
   <!-- chat widget -->
-  <button id="chat-toggle" class="chat-toggle" aria-label="Open chat">Chat</button>
+  <button id="chat-toggle" class="chat-toggle" aria-label="Open chat">Need help? Chat</button>
   <section id="chat" class="chat" hidden aria-label="IT help chat">
     <div class="chat-head">
       <strong>IT help assistant</strong>
