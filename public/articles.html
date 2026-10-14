@@ -212,7 +212,6 @@
       URL.revokeObjectURL(link.href);
     };
 
-    // The try box asks the real server, so it answers exactly like the bot does without AI.
     let tryTimer = null;
     $("try").oninput = () => {
       clearTimeout(tryTimer);

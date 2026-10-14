@@ -1,5 +1,5 @@
-// Email alerts for the IT team, sent through Resend (https://resend.com) with a plain web request, no packages.
-// Turned on by two settings: RESEND_API_KEY and ALERT_EMAIL_TO (one or more addresses, separated by commas).
+
+// email alerts through resend. needs RESEND_API_KEY and ALERT_EMAIL_TO
 
 const knowledge = require("./knowledge");
 
@@ -10,7 +10,7 @@ const LINK = (process.env.PUBLIC_URL || "").replace(/\/$/, "");
 
 const enabled = Boolean(KEY && TO.length);
 
-// Two limits so a busy day, or someone spamming the chat, can never flood an inbox.
+// limits so the inbox never gets flooded
 const PER_CHAT_MS = 30 * 60 * 1000;
 const PER_HOUR = 20;
 const lastForChat = new Map();
@@ -39,7 +39,6 @@ async function send(subject, text) {
   }
 }
 
-// Sends and never throws, an alert problem must not break the chat.
 function fire(subject, text, key) {
   if (!enabled || !allowed(key)) return;
   send(subject, text + (LINK ? "\n\nOpen it: " + LINK + "/agent.html" : "")).catch((err) => console.error(err.message));
@@ -58,7 +57,6 @@ module.exports = {
   chatBecameUrgent: (conv) => fire("URGENT chat", "Problem: " + firstProblem(conv), "urgent:" + conv.id),
   newTicket: (t) =>
     fire((t.priority === "urgent" ? "URGENT: " : "") + "New ticket " + t.id, t.name + " (" + t.contact + (t.place ? ", " + t.place : "") + ")\n\n" + (t.summary || ""), "ticket:" + t.id),
-  // For the test button, this one reports back whether it worked.
   test: async () => {
     if (!enabled) throw new Error("Email alerts are off. Set RESEND_API_KEY and ALERT_EMAIL_TO on the server.");
     await send("Test from the NBB IT Help project", "If you can read this, email alerts work.");

@@ -6,19 +6,19 @@ services:
     buildCommand: npm install
     startCommand: node server.js
     envVars:
-      # AI, set one of these
+      # the ai key
       - key: GROQ_API_KEY
         sync: false
-      # The owner account: username admin, with this password
+      # password for the admin account
       - key: ADMIN_PASSWORD
         sync: false
-      # A long random text. Keeps IT team sign ins valid across restarts
+      # keeps logins working after a restart
       - key: SESSION_SECRET
         generateValue: true
-      # Optional: a Postgres address, so chats and tickets are kept for good
+      # optional, a postgres address so nothing is lost on restart
       - key: DATABASE_URL
         sync: false
-      # Optional: email alerts (https://resend.com)
+      # optional, email alerts
       - key: RESEND_API_KEY
         sync: false
       - key: ALERT_EMAIL_TO

@@ -18,7 +18,6 @@ a { color: inherit; }
 
 .disclaimer { background: #fff4d6; color: #5a4300; text-align: center; font-size: 13px; padding: 8px 12px; border-bottom: 1px solid #ecd98f; }
 
-/* header */
 .top { background: #fff; }
 .bar { display: flex; align-items: center; justify-content: space-between; gap: 24px; height: 96px; }
 .brand { text-decoration: none; display: flex; align-items: baseline; gap: 10px; }
@@ -30,7 +29,6 @@ a { color: inherit; }
 .login { background: var(--brand); color: #fff; text-decoration: none; padding: 11px 24px; border-radius: 10px; font-size: 16px; white-space: nowrap; }
 .login:hover { background: var(--brand-dark); }
 
-/* card row */
 .rail { display: flex; gap: 22px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 8px 28px 24px; max-width: 1240px; margin: 0 auto; scrollbar-width: none; }
 .rail::-webkit-scrollbar { display: none; }
 .tile { position: relative; flex: 0 0 min(300px, 78vw); height: 360px; border-radius: 24px; overflow: hidden; scroll-snap-align: start; color: #fff; display: flex; flex-direction: column; justify-content: flex-end; padding: 14px; }
@@ -49,7 +47,6 @@ a { color: inherit; }
 .tile.first .big { font-size: 34px; font-weight: 800; line-height: 1.1; }
 .tile.first .small { font-size: 14px; opacity: .85; margin-top: 8px; }
 
-/* link columns */
 .cols { display: grid; grid-template-columns: repeat(6, 1fr); gap: 28px; max-width: 1240px; margin: 0 auto; padding: 28px 28px 8px; }
 .col .head { position: relative; height: 52px; }
 .col .head::before { content: ""; position: absolute; left: 0; right: 0; top: 24px; border-top: 1px solid var(--line); }
@@ -71,7 +68,6 @@ button { font: inherit; cursor: pointer; }
 .primary:disabled { opacity: .6; cursor: default; }
 .tile .primary { background: #fff; color: var(--brand); font-weight: 600; margin-top: 16px; }
 
-/* chat widget */
 .chat-toggle { position: fixed; right: 22px; bottom: 22px; background: var(--brand); color: #fff; border: 0; border-radius: 30px; padding: 14px 24px; font-weight: 600; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
 .chat-toggle:hover { background: var(--brand-dark); }
 .chat { position: fixed; right: 22px; bottom: 22px; width: 370px; max-width: calc(100vw - 24px); height: 540px; max-height: calc(100vh - 40px); background: #fff; border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 10px 34px rgba(0,0,0,.25); display: flex; flex-direction: column; overflow: hidden; }
@@ -88,7 +84,6 @@ button { font: inherit; cursor: pointer; }
 .ticket p { margin: 0; font-size: 13px; }
 .warn { margin: 0; padding: 0 12px 8px; font-size: 11px; color: var(--muted); }
 
-/* IT team page */
 .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin: 8px 0 24px; }
 .page-head h1 { margin: 0 0 6px; font-size: 34px; color: var(--navy); }
 .page-head p { margin: 0; color: var(--muted); max-width: 620px; }
@@ -120,12 +115,10 @@ button { font: inherit; cursor: pointer; }
   .brand b { font-size: 34px; }
 }
 
-/* employee chat extras */
 .bubble.agent { background: #e6f0f4; border: 1px solid #b8d3de; }
 .bubble .tag { display: block; font-size: 11px; color: var(--navy); margin-bottom: 2px; }
 .bubble.note { align-self: center; background: none; color: var(--muted); font-size: 12px; text-align: center; max-width: 92%; }
 
-/* IT team live chats */
 .tabs { display: flex; gap: 8px; margin-bottom: 18px; }
 .tab { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 20px; color: var(--navy); font-weight: 600; }
 .tab.on { background: var(--brand); border-color: var(--brand); color: #fff; }
@@ -162,7 +155,6 @@ button { font: inherit; cursor: pointer; }
   .convs { max-height: 260px; }
 }
 
-/* language button, ticket check, feedback, pictures */
 .bar-right { display: flex; align-items: center; gap: 12px; }
 .lang { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; color: var(--navy); font-weight: 600; }
 .lang:hover { border-color: var(--brand); color: var(--brand); }
@@ -183,13 +175,11 @@ button { font: inherit; cursor: pointer; }
 .bubble.pic { padding: 4px; background: none; border: 1px solid var(--line); }
 .bubble.pic img { display: block; max-width: 230px; max-height: 200px; border-radius: 10px; }
 
-/* right to left (Arabic) */
 html[dir="rtl"] .brand span { border-left: 0; border-right: 2px solid var(--brand); padding-left: 0; padding-right: 10px; }
 html[dir="rtl"] .col li a::after { content: " \2190"; }
 html[dir="rtl"] .tile a.go::after { content: " \2190"; }
 html[dir="rtl"] .chat-toggle, html[dir="rtl"] .chat { right: auto; left: 22px; }
 
-/* IT team extras */
 .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; }
 .toolbar select { padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; background: #fff; }
 .sub { font-size: 20px; font-weight: 500; color: var(--navy); margin: 28px 0 12px; }
@@ -221,14 +211,12 @@ html[dir="rtl"] .chat-toggle, html[dir="rtl"] .chat { right: auto; left: 22px; }
 .art-msg { color: var(--navy); font-weight: 600; font-size: 14px; }
 @media (max-width: 600px) { .bar-row { grid-template-columns: 1fr 70px 30px; } .bar-name { grid-column: 1 / -1; } }
 
-/* sign in */
 .signin { max-width: 380px; margin: 56px auto; background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 28px; display: grid; gap: 14px; }
 .signin h1 { margin: 0; font-size: 26px; color: var(--navy); }
 .signin label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; color: var(--navy); }
 .signin input, .stack input { padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; font-size: 15px; font-weight: 400; }
 .signin-error { color: var(--brand); font-size: 14px; min-height: 20px; margin: 0; }
 
-/* help articles page */
 .menu a.here { border-color: var(--brand); color: var(--brand); }
 .head-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .dirty { background: #fff4d6; color: #5a4300; font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 999px; }
@@ -259,7 +247,6 @@ html[dir="rtl"] .chat-toggle, html[dir="rtl"] .chat { right: auto; left: 22px; }
 .ghost.danger { color: var(--brand); border-color: #f0a6a9; }
 @media (max-width: 900px) { .editor { grid-template-columns: 1fr; } }
 
-/* team tab */
 .team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
 .panel-card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; }
 .panel-card .sub { margin: 0 0 10px; }

@@ -1,5 +1,5 @@
-// SupportDesk server. No dependencies, only Node built ins.
-// Flow: an employee chats with the AI first, and if the AI cannot solve it, a ticket is created for the IT team.
+
+// main server file, start it with node server.js
 
 const http = require("http");
 const fs = require("fs");
@@ -11,8 +11,6 @@ const alerts = require("./alerts");
 
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
-const API_KEY = process.env.ANTHROPIC_API_KEY || "";
-const MODEL = process.env.MODEL || "claude-haiku-5-5";
 const GROQ_KEY = process.env.GROQ_API_KEY || "";
 const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
 const GEMINI_KEY = process.env.GEMINI_API_KEY || "";
@@ -20,12 +18,15 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const PUBLIC_DIR = path.join(__dirname, "public");
 const knowledge = require("./knowledge");
 
-const AI_TIMEOUT_MS = 15000; // if the AI is slower than this, use the keyword answer instead
+// if the ai takes longer than this we use the keyword answers instead
+
+const AI_TIMEOUT_MS = 15000;
 const ESCALATE_TAG = "[ESCALATE]";
 const MAX_BODY = 20000;
-const MAX_IMAGE_BODY = 700000; // a screenshot sent as text, about 500 KB of picture
+const MAX_IMAGE_BODY = 700000;
 const MAX_MESSAGES = 20;
 
+// what we tell the ai before every chat
 function systemPrompt() {
   return [
   "You are the first line IT help assistant for staff, in a student project that imitates an NBB internal helpdesk. Say so if asked whether you are the real NBB system.",
@@ -46,19 +47,14 @@ function systemPrompt() {
 ].join("\n");
 }
 
-// ---------- storage ----------
-// The store keeps everything in memory for speed and saves it in the background,
-// to files or to a database, depending on whether DATABASE_URL is set (see store.js).
-
+// everything is kept in memory and saved in the background, see store.js
 let store = null;
 let conversations = null;
 const readTickets = () => store.tickets;
 const saveTickets = () => Promise.resolve(store.saveTickets()).catch((err) => console.error("Could not save tickets: " + err.message));
 const saveUsers = () => Promise.resolve(store.saveUsers()).catch((err) => console.error("Could not save team: " + err.message));
 
-// ---------- the answer engine ----------
-
-// Every message the bot writes by itself comes in English and Arabic. It picks by the employee's own words.
+// every message the bot writes itself, english first then arabic
 const TEXT = {
   notFound: ["I could not find a fix for that, so I will create a ticket for the IT team.", "لم أجد حلاً لهذه المشكلة، لذلك سأنشئ تذكرة لفريق تقنية المعلومات."],
   handover: ["Of course, I am forwarding you to the IT team. Please leave your details below, and a team member will reply here or contact you.", "بكل سرور، سأحوّلك إلى فريق تقنية المعلومات. اترك بياناتك في الأسفل وسيرد عليك أحد أفراد الفريق هنا أو يتواصل معك."],
@@ -69,9 +65,10 @@ const TEXT = {
 const pick = (key, hint) => TEXT[key][knowledge.isArabic(hint || "") ? 1 : 0];
 const recentText = (conv) => conv.messages.filter((m) => m.role === "user").slice(-3).map((m) => m.content).join(" ");
 
+// words that make a chat urgent
 const URGENT = /\b(urgent|urgently|asap|emergency|critical|immediately|right now)\b|\b(everyone|everybody|whole (team|department|floor|branch)|all of us|nobody|no one)\b.{0,30}\b(can'?t|cannot|unable|down|not working)\b|(عاجل|ضروري|الجميع|الكل)/i;
 
-// When someone asks for a person, we do not leave that to the AI. The server spots it and hands over at once.
+// words people use when they want a real person
 const WANTS_HUMAN = new RegExp(
   [
     "\\b(human(?! resources)|real person|live agent|real agent|technician|support staff)\\b",
@@ -82,30 +79,11 @@ const WANTS_HUMAN = new RegExp(
   "i"
 );
 
-// The chat box shows plain text, so remove any markdown the AI adds anyway.
+// the chat box cant show markdown, so take it out
 function plain(text) {
   return text.replace(/\*\*|__|`/g, "").replace(/^\s*[*#>]+\s+/gm, "").replace(/[ \t]+\n/g, "\n").trim();
 }
 
-async function aiAnswer(messages, system = systemPrompt()) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    signal: AbortSignal.timeout(AI_TIMEOUT_MS),
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({ model: MODEL, max_tokens: 400, system, messages }),
-  });
-  if (!res.ok) throw new Error("AI request failed with status " + res.status);
-  const data = await res.json();
-  const raw = (data.content || []).map((c) => c.text || "").join("").trim();
-  const escalate = raw.includes(ESCALATE_TAG);
-  return { reply: plain(raw.replace(ESCALATE_TAG, "")), escalate };
-}
-
-// Google Gemini. It calls the assistant "model" instead of "assistant".
 async function geminiAnswer(messages, system = systemPrompt()) {
   const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent";
   const res = await fetch(url, {
@@ -126,8 +104,6 @@ async function geminiAnswer(messages, system = systemPrompt()) {
   return { reply: plain(raw.replace(ESCALATE_TAG, "")), escalate: raw.includes(ESCALATE_TAG) };
 }
 
-// Groq uses the common chat format, where the instructions go in as a "system" message.
-// A 404 means the model name is wrong, so print the names this key can use.
 async function listGroqModels() {
   try {
     const res = await fetch("https://api.groq.com/openai/v1/models", {
@@ -150,7 +126,6 @@ async function groqAnswer(messages, system = systemPrompt()) {
     headers: { "content-type": "application/json", authorization: "Bearer " + GROQ_KEY },
     body: JSON.stringify({
       model: GROQ_MODEL,
-      // The gpt-oss models think first, and the thinking counts toward the limit, so allow more room.
       max_tokens: 1500,
       ...(GROQ_MODEL.includes("gpt-oss") ? { reasoning_effort: "low" } : {}),
       messages: [{ role: "system", content: system }, ...messages],
@@ -166,29 +141,25 @@ async function groqAnswer(messages, system = systemPrompt()) {
   return { reply: plain(raw.replace(ESCALATE_TAG, "")), escalate: raw.includes(ESCALATE_TAG) };
 }
 
-const AI_ON = Boolean(GEMINI_KEY || GROQ_KEY || API_KEY);
+const AI_ON = Boolean(GEMINI_KEY || GROQ_KEY);
 
 function callAI(messages, system) {
   if (GEMINI_KEY) return geminiAnswer(messages, system);
   if (GROQ_KEY) return groqAnswer(messages, system);
-  return aiAnswer(messages, system);
+  throw new Error("No AI key is set");
 }
 
 async function answer(messages) {
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
-  // Messages from the same side are merged for the AI, but keyword matching only needs the newest line.
   const newest = lastUser.content.split("\n").pop();
   if (!AI_ON) return knowledge.keywordAnswer(newest, pick("notFound", newest));
   try {
     return await callAI(messages, systemPrompt());
   } catch (err) {
     console.error(err.message);
-    // If the AI is down, fall back so the employee is never stuck.
     return knowledge.keywordAnswer(newest, pick("notFound", newest));
   }
 }
-
-// ---------- ticket summary ----------
 
 const SUMMARY_PROMPT = [
   "You write a short handoff note for an IT support team, from a chat between an employee and a help assistant.",
@@ -201,7 +172,6 @@ const SUMMARY_PROMPT = [
 
 const isBotNotice = (content) => Object.values(TEXT).some((pair) => pair.includes(content));
 
-// Used when the AI is off or fails. Plain and always available.
 function fallbackSummary(transcript) {
   const firstUser = transcript.find((m) => m.role === "user");
   const lastBot = [...transcript].reverse().find((m) => m.role === "assistant" && !isBotNotice(m.content));
@@ -224,15 +194,12 @@ async function summarize(transcript) {
   }
 }
 
-// ---------- helpers ----------
-
 function cleanMessages(input) {
   if (!Array.isArray(input) || input.length === 0) return null;
   const out = input
     .slice(-MAX_MESSAGES)
     .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
     .map((m) => ({ role: m.role, content: m.content.slice(0, 1000) }));
-  // The API needs the first message to be from the user and the last one too.
   while (out.length && out[0].role !== "user") out.shift();
   if (!out.length || out[out.length - 1].role !== "user") return null;
   return out;
@@ -272,7 +239,6 @@ function serveStatic(req, res) {
   const urlPath = req.url.split("?")[0];
   const rel = urlPath === "/" ? "/index.html" : urlPath;
   const file = path.normalize(path.join(PUBLIC_DIR, rel));
-  // Block anything that tries to climb out of the public folder.
   if (!file.startsWith(PUBLIC_DIR + path.sep)) {
     res.writeHead(403).end("Forbidden");
     return;
@@ -287,12 +253,10 @@ function serveStatic(req, res) {
   });
 }
 
-// ---------- protection ----------
-
-// The IT team signs in with a username and password and gets a signed cookie (see auth.js).
-// With no ADMIN_PASSWORD set, the pages only open from the same computer, which keeps local testing easy.
 const LOCAL_USER = { username: "local", name: "Local", role: "owner" };
 
+// todo: lock the account after too many wrong passwords, right now there is only a rate limit
+// no ADMIN_PASSWORD set = the pages only open on this computer
 function currentUser(req) {
   if (!ADMIN_PASSWORD) {
     const a = req.socket.remoteAddress || "";
@@ -301,14 +265,13 @@ function currentUser(req) {
   const session = auth.readSession(req);
   if (!session) return null;
   const user = store.users.find((u) => u.username === session.u);
-  // A changed password (or a removed person) ends the session.
   return user && user.hash.slice(0, 8) === session.pv ? user : null;
 }
 
 const isHttps = (req) => req.headers["x-forwarded-proto"] === "https" || Boolean(req.socket.encrypted);
 const safeUser = (u) => ({ username: u.username, name: u.name, role: u.role });
 
-// The owner account always matches the ADMIN_PASSWORD setting, so a forgotten password is fixed by changing that setting.
+// the admin account always follows the ADMIN_PASSWORD setting
 async function ensureOwner() {
   if (!ADMIN_PASSWORD) return;
   let owner = store.users.find((u) => u.username === "admin");
@@ -319,7 +282,7 @@ async function ensureOwner() {
   await saveUsers();
 }
 
-// Simple limit per visitor, kept in memory. Stops one person using up the free AI quota.
+// stops one person using up the free ai quota
 const hits = new Map();
 function tooMany(req, bucket, max, windowMs) {
   const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
@@ -332,10 +295,6 @@ function tooMany(req, bucket, max, windowMs) {
 }
 setInterval(() => hits.clear(), 60 * 60 * 1000).unref();
 
-// ---------- live conversations ----------
-// Every chat is stored on the server, so the IT team can read it, take over from the bot and reply.
-// Roles: user (employee), assistant (bot), agent (IT team member), system (notes like "joined the chat").
-
 const MAX_CONVERSATIONS = 300;
 const MAX_CONV_MESSAGES = 100;
 
@@ -344,14 +303,14 @@ function newConversation() {
     id: crypto.randomUUID(),
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    mode: "bot", // bot or human
+    mode: "bot",
     needsHuman: false,
-    everEscalated: false, // stays true even after hand back, used for the numbers on the Stats tab
+    everEscalated: false,
     tookOver: false,
-    takenBy: "", // display name of the IT team member who has the chat
+    takenBy: "",
     takenByUser: "",
-    outcome: "", // "solved" or "not_solved", from the Did that fix it buttons
-    priority: "normal", // normal or urgent
+    outcome: "",
+    priority: "normal",
     topic: "",
     name: "",
     ticketId: "",
@@ -372,9 +331,8 @@ function addMessage(conv, role, content, extra) {
   store.touch(conv);
 }
 
-// What the AI should see: the IT team counts as the assistant side, system notes are left out.
+// leave out the ticket lines or the bot starts copying them
 function forAI(conv) {
-  // The "I am creating a ticket" lines are left out, otherwise the AI copies them again and again.
   const mapped = [];
   for (const m of conv.messages) {
     if (m.role === "system" || m.esc) continue;
@@ -409,8 +367,7 @@ function requireJson(req) {
   return String(req.headers["content-type"] || "").startsWith("application/json");
 }
 
-// ---------- numbers for the Stats tab ----------
-
+// the numbers for the stats tab
 function buildStats(range) {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -418,7 +375,6 @@ function buildStats(range) {
   const chats = [...conversations.values()].filter((c) => c.createdAt >= from && c.messages.some((m) => m.role === "user"));
   const tickets = readTickets().filter((t) => new Date(t.createdAt).getTime() >= from);
 
-  // Every chat lands in exactly one group: needed a person, solved by the bot, or no answer given yet.
   const needed = chats.filter((c) => c.everEscalated).length;
   const solved = chats.filter((c) => !c.everEscalated && c.outcome === "solved").length;
   const topics = {};
@@ -440,15 +396,12 @@ function buildStats(range) {
   };
 }
 
-// ---------- routes ----------
-
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://localhost");
     const pathname = url.pathname;
     const since = Math.max(0, parseInt(url.searchParams.get("since") || "0", 10) || 0);
 
-    // employee sends a message
     if (req.method === "POST" && pathname === "/api/chat") {
       if (tooMany(req, "chat", 30, 60 * 1000)) return sendJson(res, 429, { error: "Too many messages, please wait a minute." });
       const body = await readBody(req);
@@ -465,13 +418,11 @@ const server = http.createServer(async (req, res) => {
         alerts.chatBecameUrgent(conv);
       }
       if (!conv.topic && !knowledge.isGreeting(text)) conv.topic = knowledge.topicFor(text);
-      // When a person has taken over, the bot stays quiet.
       if (conv.mode === "bot" && WANTS_HUMAN.test(text)) {
         addMessage(conv, "assistant", pick("handover", text), { esc: true });
         flagForPerson(conv);
       } else if (conv.mode === "bot") {
         const result = await answer(forAI(conv));
-        // A real fix gets the "Did that fix it?" buttons, a greeting or a hand over does not.
         const asksFeedback = !result.escalate && !knowledge.isGreeting(text);
         addMessage(conv, "assistant", result.reply, result.escalate ? { esc: true } : asksFeedback ? { fb: true } : undefined);
         if (result.escalate) flagForPerson(conv);
@@ -479,7 +430,6 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { id: conv.id, ...publicView(conv, conv.messages.length) });
     }
 
-    // employee page asks for anything new
     const poll = pathname.match(/^\/api\/chat\/([\w-]+)$/);
     if (req.method === "GET" && poll) {
       if (tooMany(req, "poll", 120, 60 * 1000)) return sendJson(res, 429, { error: "Slow down." });
@@ -488,7 +438,6 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, publicView(conv, since));
     }
 
-    // employee presses Yes or No on "Did that fix it?"
     const feedback = pathname.match(/^\/api\/chat\/([\w-]+)\/feedback$/);
     if (req.method === "POST" && feedback) {
       if (tooMany(req, "poll", 120, 60 * 1000)) return sendJson(res, 429, { error: "Slow down." });
@@ -511,7 +460,6 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, publicView(conv, since));
     }
 
-    // employee attaches a screenshot (the page shrinks it to a small JPEG first)
     const image = pathname.match(/^\/api\/chat\/([\w-]+)\/image$/);
     if (req.method === "POST" && image) {
       if (tooMany(req, "image", 8, 10 * 60 * 1000)) return sendJson(res, 429, { error: "Too many screenshots, please wait." });
@@ -532,7 +480,6 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, publicView(conv, since));
     }
 
-    // pictures are served by their long random name, nobody can guess one
     const upload = pathname.match(/^\/uploads\/([0-9a-f-]{36}\.jpg)$/);
     if (req.method === "GET" && upload) {
       const data = await store.getImage(upload[1]);
@@ -541,19 +488,16 @@ const server = http.createServer(async (req, res) => {
       return res.end(data);
     }
 
-    // employee checks a ticket, with the ticket number and the contact they gave
     if (req.method === "POST" && pathname === "/api/ticket-status") {
       if (tooMany(req, "status", 10, 60 * 1000)) return sendJson(res, 429, { error: "Too many tries, please wait a minute." });
       const body = await readBody(req);
       const id = String(body.id || "").trim().toLowerCase();
       const contact = String(body.contact || "").trim().toLowerCase();
       const ticket = readTickets().find((t) => t.id.toLowerCase() === id && t.contact.trim().toLowerCase() === contact);
-      // The same answer for a wrong number and a wrong contact, so nobody can look up other people's tickets.
       if (!ticket) return sendJson(res, 404, { error: "No ticket found with those details." });
       return sendJson(res, 200, { id: ticket.id, status: ticket.status || "open", createdAt: ticket.createdAt, solvedAt: ticket.solvedAt || "" });
     }
 
-    // employee sends the ticket form
     if (req.method === "POST" && pathname === "/api/ticket") {
       if (tooMany(req, "ticket", 5, 60 * 60 * 1000)) return sendJson(res, 429, { error: "Too many tickets, please try later." });
       const body = await readBody(req);
@@ -566,6 +510,7 @@ const server = http.createServer(async (req, res) => {
       if (!name || !contact) return sendJson(res, 400, { error: "Name and contact are required." });
       const transcript = conv.messages.filter((m) => m.role !== "system").map((m) => ({ role: m.role, content: m.content }));
       const tickets = readTickets();
+// todo: let a ticket be given to one person
       const ticket = {
         id: "T" + String(tickets.length + 1).padStart(4, "0"),
         createdAt: new Date().toISOString(),
@@ -589,7 +534,6 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 201, { id: ticket.id });
     }
 
-    // IT team signs in
     if (req.method === "POST" && pathname === "/api/login") {
       if (tooMany(req, "login", 10, 10 * 60 * 1000)) return sendJson(res, 429, { error: "Too many tries. Please wait a few minutes." });
       if (!requireJson(req)) return sendJson(res, 415, { error: "Send JSON." });
@@ -597,7 +541,6 @@ const server = http.createServer(async (req, res) => {
       const username = String(body.username || "").trim().toLowerCase();
       const user = store.users.find((u) => u.username === username);
       const ok = auth.checkPassword(String(body.password || "").slice(0, 200), user);
-      // The same message for a wrong name and a wrong password.
       if (!ok) return sendJson(res, 401, { error: "Wrong username or password." });
       res.setHeader("set-cookie", auth.makeCookie(user, isHttps(req)));
       return sendJson(res, 200, safeUser(user));
@@ -607,7 +550,6 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
-    // everything below is for the IT team only
     const user = currentUser(req);
     const teamPage = pathname === "/agent.html" || pathname === "/articles.html";
     const teamApi = /^\/api\/(tickets|conversations|stats|knowledge|team|me|config|alerts)(\/|$)/.test(pathname);
@@ -623,7 +565,6 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { storage: store.mode, emailAlerts: alerts.enabled, user: safeUser(user) });
     }
 
-    // team members: anyone signed in can see the list and change their own password, only the owner manages the rest
     const strongEnough = (p) => typeof p === "string" && p.length >= 8 && p.length <= 100;
     if (req.method === "GET" && pathname === "/api/team") {
       return sendJson(res, 200, store.users.map((u) => ({ ...safeUser(u), createdAt: u.createdAt })));
@@ -683,7 +624,6 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    // try the bot's keyword match from the articles page
     if (req.method === "POST" && pathname === "/api/knowledge/test") {
       if (!requireJson(req)) return sendJson(res, 415, { error: "Send JSON." });
       const body = await readBody(req);
@@ -696,7 +636,6 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, [...readTickets()].reverse());
     }
 
-    // mark a ticket solved or open again
     const ticketStatus = pathname.match(/^\/api\/tickets\/(T\d+)\/status$/);
     if (req.method === "POST" && ticketStatus) {
       if (!requireJson(req)) return sendJson(res, 415, { error: "Send JSON." });
@@ -718,7 +657,6 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, buildStats(range));
     }
 
-    // the help articles, edited from the IT team page
     if (pathname === "/api/knowledge") {
       if (req.method === "GET") return sendJson(res, 200, knowledge.get());
       if (req.method === "POST") {
@@ -732,7 +670,6 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    // chats waiting for a person come first, urgent ones before the rest
     const weight = (c) => (c.needsHuman && c.mode !== "human" ? 2 : 0) + (c.priority === "urgent" ? 1 : 0);
 
     if (req.method === "GET" && pathname === "/api/conversations") {
@@ -766,7 +703,6 @@ const server = http.createServer(async (req, res) => {
 
       if (req.method === "GET" && !action) return sendJson(res, 200, { id: conv.id, name: conv.name, ticketId: conv.ticketId, ...publicView(conv, since) });
 
-      // These change things, so they must be sent as JSON. A page on another site cannot do that with our password.
       if (req.method === "POST" && action) {
         if (!requireJson(req)) return sendJson(res, 415, { error: "Send JSON." });
         if (action === "takeover") {
@@ -828,11 +764,9 @@ async function start() {
     console.log(alerts.enabled ? "Email alerts on, " + alerts.recipients + " recipient(s)" : "Email alerts off");
     if (GEMINI_KEY) console.log("AI mode on, Gemini model " + GEMINI_MODEL);
     else if (GROQ_KEY) console.log("AI mode on, Groq model " + GROQ_MODEL);
-    else if (API_KEY) console.log("AI mode on, Claude model " + MODEL);
     else console.log("No API key set, using the built in keyword answers");
   });
 
-  // Hosts stop the server on every deploy. Save anything waiting before it goes.
   const shutdown = async () => {
     await store.flush();
     process.exit(0);

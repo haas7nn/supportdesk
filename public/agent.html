@@ -138,7 +138,6 @@
       return e;
     }
 
-    // ---------- tabs ----------
     const TABS = ["live", "tickets", "stats", "team"];
     let currentTab = "live";
     function showTab(name) {
@@ -153,7 +152,6 @@
     }
     for (const t of TABS) $("tab-" + t).onclick = () => showTab(t);
 
-    // ---------- sound and title alerts ----------
     let soundOn = false;
     let audio = null;
     $("sound").onclick = () => {
@@ -175,7 +173,7 @@
       osc.start();
       osc.stop(audio.currentTime + 0.18);
     }
-    let knownWaiting = null; // ids already waiting, so only new ones make a sound
+    let knownWaiting = null;
     function alertFor(items) {
       const waiting = items.filter((c) => c.needsHuman && c.mode !== "human");
       document.title = (waiting.length ? "(" + waiting.length + ") " : "") + BASE_TITLE;
@@ -187,7 +185,6 @@
       knownWaiting = ids;
     }
 
-    // ---------- live chats ----------
     const REPLIES = [
       "Hello, I am from the IT team and I will help you now.",
       "Please restart your computer and tell me if it helps.",
@@ -318,7 +315,6 @@
       } catch (err) { $("reply").value = text; alert(err.message); }
     };
 
-    // ---------- tickets ----------
     function noteRows(text) {
       const box = el("div", "note-rows");
       for (const raw of text.split("\n")) {
@@ -384,7 +380,6 @@
     }
     $("ticket-filter").onchange = loadTickets;
 
-    // ---------- stats ----------
     function statCard(label, value, hint) {
       const c = el("div", "stat");
       c.append(el("div", "stat-value", String(value)), el("div", "stat-label", label));
@@ -422,7 +417,6 @@
     }
     $("range").onchange = loadStats;
 
-    // ---------- team ----------
     async function loadTeam() {
       try {
         const [cfg, members] = await Promise.all([api("/api/config"), api("/api/team")]);
@@ -482,7 +476,6 @@
     };
     $("logout").onclick = async () => { await api("/api/logout", {}).catch(() => {}); location.href = "/login.html"; };
 
-    // ---------- start ----------
     api("/api/config").then((cfg) => { me = cfg.user; $("whoami").textContent = me.name; refreshList(); }).catch(() => {});
     loadTickets();
     setInterval(refreshList, 3000);

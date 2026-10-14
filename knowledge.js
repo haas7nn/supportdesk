@@ -1,5 +1,5 @@
-// Help articles: loading, checking, saving, and the simple keyword matcher.
-// The IT team edits these from the "Help articles" tab, and the AI is given the same list.
+
+// the help articles. load, check, save and match them
 
 const fs = require("fs");
 const path = require("path");
@@ -15,7 +15,6 @@ function get() {
 
 const text = (v, max) => String(v == null ? "" : v).trim().slice(0, max);
 
-// Cleans whatever the editor sends. Throws a readable error so the page can show it.
 function check(list) {
   if (!Array.isArray(list)) throw new Error("Send a list of articles.");
   if (list.length > MAX_ARTICLES) throw new Error("Too many articles, the limit is " + MAX_ARTICLES + ".");
@@ -34,7 +33,6 @@ function check(list) {
   });
 }
 
-// With a database, edits are kept there, so a redeploy of the code does not wipe them.
 let keep = null;
 async function init(store) {
   if (store.mode !== "postgres") return;
@@ -50,7 +48,6 @@ function set(list) {
     try {
       fs.writeFileSync(FILE, JSON.stringify(cleaned, null, 2));
     } catch {
-      // a read only disk is fine, the database has it
     }
   } else {
     fs.writeFileSync(FILE, JSON.stringify(cleaned, null, 2));
@@ -63,7 +60,7 @@ const isArabic = (t) => /[؀-ۿ]/.test(t);
 const GREETING = /^\s*(hi|hello|hey|hola|salam|good (morning|afternoon|evening)|thanks|thank you|مرحبا|مرحباً|اهلا|أهلا|هلا|السلام عليكم|شكرا|شكراً)(\s|$|[!.,؟?])/i;
 const isGreeting = (t) => GREETING.test(t) && t.length < 30;
 
-// Scores each article by how many of its keywords appear in the text.
+// picks the article with the most keyword hits
 function bestArticle(t) {
   const words = t.toLowerCase();
   let best = null;
@@ -78,13 +75,12 @@ function bestArticle(t) {
   return best;
 }
 
-// The problem area of a message, used for the "most common problems" chart.
 function topicFor(t) {
   const hit = bestArticle(t);
   return hit ? hit.topic : "Other";
 }
 
-// What the bot says with no AI key, or when the AI is down.
+// used when theres no ai key or the ai is down
 function keywordAnswer(t, notFound) {
   const ar = isArabic(t);
   if (isGreeting(t)) {

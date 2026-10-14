@@ -1,6 +1,5 @@
-// Chat widget. The conversation lives on the server, so the IT team can read it and take over.
-// This page sends messages, then asks the server every few seconds for anything new
-// (bot answers, or a reply from an IT team member). Texts come from i18n.js, in English or Arabic.
+
+// the chat box on the portal page
 
 const chat = document.getElementById("chat");
 const toggle = document.getElementById("chat-toggle");
@@ -10,18 +9,18 @@ const input = document.getElementById("msg");
 const ticketForm = document.getElementById("ticket-form");
 const fileInput = document.getElementById("file");
 
+// asks the server for new messages every few seconds
 const POLL_MS = 3000;
 let convId = null;
 try {
   convId = sessionStorage.getItem("chatId");
 } catch {
-  // storage can be blocked, the chat still works until the page reloads
 }
-let seen = 0; // how many server messages are already on screen
+let seen = 0;
 let started = false;
 let timer = null;
 let humanMode = false;
-const pendingBubbles = []; // the employee's own bubbles shown before the server confirms them
+const pendingBubbles = [];
 let typing = null;
 
 function addBubble(text, kind, label) {
@@ -33,7 +32,7 @@ function addBubble(text, kind, label) {
     tag.textContent = label;
     div.append(tag);
   }
-  div.append(document.createTextNode(text)); // text nodes only, so nothing typed can run as code
+  div.append(document.createTextNode(text));
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;
   return div;
@@ -58,7 +57,6 @@ function showTyping(on) {
   }
 }
 
-// The "Did that fix it?" buttons. Only the newest answer keeps them.
 function addFeedback(index) {
   log.querySelectorAll(".fb").forEach((el) => el.remove());
   const row = document.createElement("div");
@@ -99,7 +97,6 @@ function render(m) {
   if (m.img) {
     addPicture(m.img);
   } else if (m.role === "user") {
-    // Already shown when it was sent, so just mark that one as confirmed.
     if (pendingBubbles.length) pendingBubbles.shift();
     else addBubble(m.content, "me");
   } else if (m.role === "agent") {
@@ -122,7 +119,6 @@ function applyState(data) {
     showTyping(false);
     log.querySelectorAll(".fb").forEach((el) => el.remove());
   }
-  // Offer the ticket form when the assistant could not solve it and there is no ticket yet.
   ticketForm.hidden = !(data.needsHuman && !data.ticketId);
   input.placeholder = humanMode ? t("ph_human") : t("ph_msg");
 }
@@ -132,7 +128,6 @@ async function poll() {
   try {
     const res = await fetch("/api/chat/" + convId + "?since=" + seen);
     if (res.status === 404) {
-      // The server forgot this chat (it restarted), so start fresh.
       convId = null;
       seen = 0;
       try { sessionStorage.removeItem("chatId"); } catch { /* ignore */ }
@@ -140,7 +135,6 @@ async function poll() {
     }
     if (res.ok) applyState(await res.json());
   } catch {
-    // network blip, try again on the next tick
   }
 }
 
@@ -150,7 +144,7 @@ async function openChat() {
   if (!started) {
     started = true;
     addBubble(t("greeting"), "bot");
-    if (convId) await poll(); // page was reloaded in the middle of a chat, so load it back
+    if (convId) await poll();
   }
   clearInterval(timer);
   timer = setInterval(poll, POLL_MS);
@@ -167,7 +161,6 @@ toggle.addEventListener("click", openChat);
 document.getElementById("hero-chat").addEventListener("click", openChat);
 document.getElementById("chat-close").addEventListener("click", closeChat);
 
-// Links on the page that start the chat with a question already asked.
 document.querySelectorAll("[data-ask]").forEach((link) => {
   link.addEventListener("click", async (e) => {
     e.preventDefault();
@@ -199,7 +192,6 @@ form.addEventListener("submit", async (e) => {
       convId = data.id;
       try { sessionStorage.setItem("chatId", convId); } catch { /* ignore */ }
     }
-    // The answer is already stored, so this is the same data a poll would give.
     const next = await fetch("/api/chat/" + convId + "?since=" + seen);
     if (next.ok) applyState(await next.json());
   } catch (err) {
@@ -212,9 +204,7 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
-// ---------- screenshots ----------
-
-// Shrinks the picture in the browser first, so it is small and always a JPEG.
+// make the screenshot small and always a jpeg before sending
 function shrink(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -267,8 +257,6 @@ fileInput.addEventListener("change", async () => {
   }
 });
 
-// ---------- ticket form and ticket check ----------
-
 ticketForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const button = ticketForm.querySelector("button");
@@ -317,7 +305,6 @@ document.getElementById("check-form").addEventListener("submit", async (e) => {
   }
 });
 
-// Changing the language also changes the texts the chat made before.
 document.addEventListener("langchange", () => {
   input.placeholder = humanMode ? t("ph_human") : t("ph_msg");
 });

@@ -21,7 +21,7 @@ Without an API key it still works, using simple keyword matching on `knowledge.j
 GEMINI_API_KEY=your_key_here node server.js
 ```
 
-Free Groq keys come from https://console.groq.com, run with `GROQ_API_KEY=your_key_here node server.js`. A free Gemini key comes from https://aistudio.google.com. If you use a paid Anthropic key instead, set `ANTHROPIC_API_KEY`. If several keys are set, the order is Gemini, then Groq, then Anthropic.
+Free Groq keys come from https://console.groq.com, run with `GROQ_API_KEY=your_key_here node server.js`. A free Gemini key comes from https://aistudio.google.com. If both keys are set, Gemini is used first.
 
 ## How it works, in four steps
 

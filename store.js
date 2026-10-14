@@ -1,7 +1,5 @@
-// Where chats, tickets, team members and screenshots are kept.
-// Without DATABASE_URL everything goes into plain files (fine on a laptop, wiped on a free host).
-// With DATABASE_URL it goes into a Postgres database, so nothing is lost when the server restarts.
-// The rest of the program only talks to the object returned by createStore(), it never knows which one it got.
+
+// saves chats, tickets and users. plain files by default, postgres if DATABASE_URL is set
 
 const fs = require("fs");
 const path = require("path");
@@ -13,8 +11,7 @@ function imagesInside(conv) {
   return (conv.messages || []).filter((m) => m.img).map((m) => path.basename(m.img));
 }
 
-// ---------- plain files ----------
-
+// file version
 async function fileStore() {
   const read = (name, fallback) => {
     try {
@@ -59,7 +56,6 @@ async function fileStore() {
   };
   store.getImage = (name) =>
     new Promise((resolve) => fs.readFile(path.join(uploads, name), (err, data) => resolve(err ? null : data)));
-  // The help articles already live in knowledge.json, so there is nothing extra to keep here.
   store.getKV = async () => null;
   store.setKV = async () => {};
   store.flush = async () => {
@@ -68,10 +64,9 @@ async function fileStore() {
   return store;
 }
 
-// ---------- Postgres ----------
-
+// database version
 async function pgStore(url) {
-  const { Pool } = require("pg"); // only needed in this mode
+  const { Pool } = require("pg");
   const pool = new Pool({ connectionString: url, max: 4 });
   const run = (sql, params) => pool.query(sql, params);
 
@@ -117,7 +112,7 @@ async function pgStore(url) {
       }
     } catch (err) {
       console.error("Could not save to the database: " + err.message);
-      ids.forEach((id) => dirty.add(id)); // try again on the next save
+      ids.forEach((id) => dirty.add(id));
     }
   }
 

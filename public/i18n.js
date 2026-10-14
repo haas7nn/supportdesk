@@ -1,5 +1,5 @@
-// English and Arabic for the employee page. English text is written in the HTML itself.
-// Elements with data-i18n="key" get their Arabic text from AR below, and switch back to the English they started with.
+
+// english and arabic for the portal. english is written in the html itself
 
 (function () {
   const AR = {
@@ -26,7 +26,6 @@
     ph_msg: "صف المشكلة", send: "إرسال", warn: "لا تكتب كلمات المرور هنا أبداً.", attach: "صورة",
     ticket_intro: "اترك بياناتك وسيتواصل معك فريق تقنية المعلومات.",
     ph_name: "اسمك", ph_contact: "الرقم الداخلي أو البريد", ph_place: "القسم ومكان المكتب أو الطابق", send_it: "إرسال إلى فريق تقنية المعلومات",
-    // used from chat.js
     greeting: "مرحباً، أنا مساعد تقنية المعلومات. أخبرني ما المشكلة، مثلاً أوتلوك أو لوحة المفاتيح أو الطابعة أو الشبكة.",
     ph_human: "اكتب لفريق تقنية المعلومات",
     it_team: "فريق تقنية المعلومات",
@@ -56,7 +55,6 @@
   try {
     lang = localStorage.getItem("lang") === "ar" ? "ar" : "en";
   } catch {
-    // storage blocked, English it is
   }
 
   window.getLang = () => lang;
@@ -77,7 +75,6 @@
       if (el.dataset.en === undefined) el.dataset.en = el.placeholder;
       el.placeholder = lang === "ar" && AR[el.dataset.i18nPh] ? AR[el.dataset.i18nPh] : el.dataset.en;
     });
-    // The links that start a chat ask the question in the page language.
     document.querySelectorAll("[data-ask-ar]").forEach((el) => {
       if (el.dataset.askEn === undefined) el.dataset.askEn = el.dataset.ask;
       el.dataset.ask = lang === "ar" ? el.dataset.askAr : el.dataset.askEn;
