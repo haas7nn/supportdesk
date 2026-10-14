@@ -13,7 +13,7 @@ function hashPassword(password) {
   return { salt, hash };
 }
 
-// do the full check even when the user doesnt exist, so the timing gives nothing away
+// do the full check even when the user doesnt exist so the timing gives nothing away
 function checkPassword(password, user) {
   const salt = user ? user.salt : "0".repeat(32);
   const expected = Buffer.from(user ? user.hash : "0".repeat(128), "hex");

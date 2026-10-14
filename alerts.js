@@ -1,5 +1,5 @@
 
-// email alerts through resend. needs RESEND_API_KEY and ALERT_EMAIL_TO
+// email alerts through resend needs RESEND_API_KEY and ALERT_EMAIL_TO
 
 const knowledge = require("./knowledge");
 

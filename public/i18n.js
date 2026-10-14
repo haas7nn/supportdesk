@@ -1,5 +1,5 @@
 
-// english and arabic for the portal. english is written in the html itself
+// english and arabic for the portal and english is written in the html itself
 
 (function () {
   const AR = {

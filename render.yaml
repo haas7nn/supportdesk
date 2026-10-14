@@ -15,10 +15,10 @@ services:
       # keeps logins working after a restart
       - key: SESSION_SECRET
         generateValue: true
-      # optional, a postgres address so nothing is lost on restart
+      # optional postgres address so nothing is lost on restart
       - key: DATABASE_URL
         sync: false
-      # optional, email alerts
+      # optional email alerts
       - key: RESEND_API_KEY
         sync: false
       - key: ALERT_EMAIL_TO

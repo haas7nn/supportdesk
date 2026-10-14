@@ -1,5 +1,5 @@
 
-// saves chats, tickets and users. plain files by default, postgres if DATABASE_URL is set
+// saves chats tickets and users in plain files or in postgres if DATABASE_URL is set
 
 const fs = require("fs");
 const path = require("path");

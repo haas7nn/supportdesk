@@ -1,5 +1,5 @@
 
-// the help articles. load, check, save and match them
+// the help articles load check save and match them
 
 const fs = require("fs");
 const path = require("path");
@@ -80,7 +80,7 @@ function topicFor(t) {
   return hit ? hit.topic : "Other";
 }
 
-// used when theres no ai key or the ai is down
+// used when there is no ai key or the ai is down
 function keywordAnswer(t, notFound) {
   const ar = isArabic(t);
   if (isGreeting(t)) {

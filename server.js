@@ -1,5 +1,5 @@
 
-// main server file, start it with node server.js
+// main server file
 
 const http = require("http");
 const fs = require("fs");
@@ -47,14 +47,14 @@ function systemPrompt() {
 ].join("\n");
 }
 
-// everything is kept in memory and saved in the background, see store.js
+// everything is kept in memory and saved in the background by the store file
 let store = null;
 let conversations = null;
 const readTickets = () => store.tickets;
 const saveTickets = () => Promise.resolve(store.saveTickets()).catch((err) => console.error("Could not save tickets: " + err.message));
 const saveUsers = () => Promise.resolve(store.saveUsers()).catch((err) => console.error("Could not save team: " + err.message));
 
-// every message the bot writes itself, english first then arabic
+// every message the bot writes itself in english first then arabic
 const TEXT = {
   notFound: ["I could not find a fix for that, so I will create a ticket for the IT team.", "لم أجد حلاً لهذه المشكلة، لذلك سأنشئ تذكرة لفريق تقنية المعلومات."],
   handover: ["Of course, I am forwarding you to the IT team. Please leave your details below, and a team member will reply here or contact you.", "بكل سرور، سأحوّلك إلى فريق تقنية المعلومات. اترك بياناتك في الأسفل وسيرد عليك أحد أفراد الفريق هنا أو يتواصل معك."],
@@ -79,7 +79,7 @@ const WANTS_HUMAN = new RegExp(
   "i"
 );
 
-// the chat box cant show markdown, so take it out
+// the chat box cant show markdown so take it out
 function plain(text) {
   return text.replace(/\*\*|__|`/g, "").replace(/^\s*[*#>]+\s+/gm, "").replace(/[ \t]+\n/g, "\n").trim();
 }
@@ -255,8 +255,7 @@ function serveStatic(req, res) {
 
 const LOCAL_USER = { username: "local", name: "Local", role: "owner" };
 
-// todo: lock the account after too many wrong passwords, right now there is only a rate limit
-// no ADMIN_PASSWORD set = the pages only open on this computer
+// with no ADMIN_PASSWORD set the pages only open on this computer
 function currentUser(req) {
   if (!ADMIN_PASSWORD) {
     const a = req.socket.remoteAddress || "";
@@ -510,7 +509,6 @@ const server = http.createServer(async (req, res) => {
       if (!name || !contact) return sendJson(res, 400, { error: "Name and contact are required." });
       const transcript = conv.messages.filter((m) => m.role !== "system").map((m) => ({ role: m.role, content: m.content }));
       const tickets = readTickets();
-// todo: let a ticket be given to one person
       const ticket = {
         id: "T" + String(tickets.length + 1).padStart(4, "0"),
         createdAt: new Date().toISOString(),
@@ -758,7 +756,7 @@ async function start() {
   await ensureOwner();
 
   server.listen(PORT, () => {
-    console.log("SupportDesk running at http://localhost:" + PORT);
+    console.log("SupportDesk running on port " + PORT);
     console.log(store.mode === "postgres" ? "Storage: database, chats and tickets are kept for good" : "Storage: plain files, a free host wipes these when it restarts");
     console.log(ADMIN_PASSWORD ? "IT team signs in with the username admin and the ADMIN_PASSWORD setting" : "No ADMIN_PASSWORD set, the IT team pages only open on this computer");
     console.log(alerts.enabled ? "Email alerts on, " + alerts.recipients + " recipient(s)" : "Email alerts off");
